@@ -9,7 +9,6 @@ import { normalizeGraph } from "./atlas-normalize.mjs";
 import { reduceGraph } from "./atlas-reduce.mjs";
 
 const ATLAS_DIR = fileURLToPath(new URL("../data/atlas/", import.meta.url));
-const PROJECTS_JS = fileURLToPath(new URL("../data/projects.js", import.meta.url));
 const OVERRIDES_DIR = fileURLToPath(new URL("./atlas-overrides/", import.meta.url));
 
 function fail(message) {
@@ -49,7 +48,8 @@ const atlas = reduceGraph(nodes, {
 });
 
 mkdirSync(ATLAS_DIR, { recursive: true });
-writeFileSync(`${ATLAS_DIR}${projectId}.json`, JSON.stringify(atlas, null, 2) + "\n");
+const atlasJson = JSON.stringify(atlas, null, 2) + "\n";
+writeFileSync(`${ATLAS_DIR}${projectId}.json`, atlasJson);
 
 const indexPath = `${ATLAS_DIR}index.json`;
 const index = existsSync(indexPath) ? JSON.parse(readFileSync(indexPath, "utf8")) : { projects: {} };
@@ -64,6 +64,9 @@ index.generatedAt = atlas.generatedAt;
 index.projects = Object.fromEntries(Object.entries(index.projects).sort(([a], [b]) => a.localeCompare(b)));
 writeFileSync(indexPath, JSON.stringify(index, null, 2) + "\n");
 
-const kb = (JSON.stringify(atlas).length / 1024).toFixed(1);
+// Dieselbe Zeichenkette messen, die tatsaechlich geschrieben wurde (pretty-
+// printed) — sonst unterschaetzt die Pruefung die reale Dateigroesse, gegen
+// die die 50-KB-Grenze eigentlich gilt.
+const kb = (atlasJson.length / 1024).toFixed(1);
 console.log(`gen-atlas: ${projectId} — ${atlas.layers.length} Layer, ${atlas.modules.length} Module, ${kb} KB`);
 if (kb > 50) console.warn("gen-atlas: WARNUNG — ueber 50 KB, Kappungsgrenzen pruefen.");

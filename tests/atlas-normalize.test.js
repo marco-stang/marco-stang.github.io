@@ -155,3 +155,47 @@ test("ist deterministisch", () => {
     JSON.stringify(normalizeGraph(FIXTURE))
   );
 });
+
+// Regressionstests fuer den .ua/-Filter (Review-Finding 2): Understand-
+// Anything legt seine eigenen Arbeitsdateien im gescannten Repo ab. Die
+// duerfen nicht als Projekt-Module in der Szene auftauchen.
+
+test("ein Knoten unter .ua/ wird verworfen", () => {
+  const raw = {
+    nodes: [
+      { id: "file:a", filePath: "src/a.py" },
+      { id: "file:ua-config", filePath: ".ua/config.json" }
+    ],
+    edges: [],
+    layers: [
+      { id: "layer:x", name: "X", description: "d", nodeIds: ["file:a", "file:ua-config"] }
+    ]
+  };
+  const { nodes } = normalizeGraph(raw);
+  assert.deepEqual(nodes.map((n) => n.id), ["file:a"]);
+});
+
+test("ein Layer, der nur aus .ua/-Knoten besteht, verschwindet komplett statt leer zu werden", () => {
+  const raw = {
+    nodes: [{ id: "file:ua-ignore", filePath: ".ua/.understandignore" }],
+    edges: [],
+    layers: [
+      { id: "layer:werkzeug", name: "Werkzeug", description: "d", nodeIds: ["file:ua-ignore"] }
+    ]
+  };
+  const { nodes, layers } = normalizeGraph(raw);
+  assert.deepEqual(nodes, []);
+  assert.deepEqual(layers, []);
+});
+
+test("ein normaler Pfad mit der Teilzeichenkette '.ua' in der Mitte wird NICHT verworfen", () => {
+  const raw = {
+    nodes: [{ id: "file:lua", filePath: "src/lua/thing.py" }],
+    edges: [],
+    layers: [
+      { id: "layer:x", name: "X", description: "d", nodeIds: ["file:lua"] }
+    ]
+  };
+  const { nodes } = normalizeGraph(raw);
+  assert.deepEqual(nodes.map((n) => n.id), ["file:lua"]);
+});

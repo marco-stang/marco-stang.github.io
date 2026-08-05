@@ -20,6 +20,45 @@ function byRelevance(fanIn) {
     a.id.localeCompare(b.id);
 }
 
+// Nach der Kappung koennen zwei ausgewaehlte Module denselben Dateinamen
+// tragen (z.B. zwei __init__.py aus verschiedenen Verzeichnissen) und landen
+// dann als zwei Punkte mit identischer Beschriftung im selben Layer. Das laesst
+// sich erst HIER erkennen: erst nach der Kappung steht fest, welche Module
+// tatsaechlich nebeneinander in einem gerenderten Layer sitzen. Dasselbe Label
+// in zwei VERSCHIEDENEN Layern ist dagegen kein Problem und bleibt unberuehrt,
+// weil diese Funktion nur je eine layer-lokale chosen-Liste bekommt.
+function disambiguateLabels(chosen) {
+  const byLabel = new Map();
+  for (const n of chosen) {
+    if (!byLabel.has(n.label)) byLabel.set(n.label, []);
+    byLabel.get(n.label).push(n);
+  }
+
+  for (const group of byLabel.values()) {
+    if (group.length < 2) continue;
+
+    const segmentsOf = (n) => (n.file || n.id).split(/[/\\]/).filter(Boolean);
+    const maxDepth = Math.max(...group.map((n) => segmentsOf(n).length));
+
+    // Verzeichnisebenen von hinten dazunehmen, bis alle Labels der Gruppe
+    // eindeutig sind — funktioniert generisch fuer jede Kollision, nicht nur
+    // Zweier-Kollisionen. Terminiert spaetestens beim vollen Pfad.
+    let depth = 2;
+    let labels = group.map((n) => segmentsOf(n).slice(-depth).join("/"));
+    while (new Set(labels).size < labels.length && depth < maxDepth) {
+      depth++;
+      labels = group.map((n) => segmentsOf(n).slice(-depth).join("/"));
+    }
+    // In der Praxis unerreichbar (identischer Pfad zweier Knoten), aber falls
+    // selbst der volle Pfad nicht eindeutig macht, entscheidet die id.
+    if (new Set(labels).size < labels.length) {
+      labels = group.map((n, i) => `${labels[i]} (${n.id})`);
+    }
+
+    group.forEach((n, i) => { n.label = labels[i]; });
+  }
+}
+
 export function reduceGraph(nodes, options) {
   const { id, repo, generatedAt, source, overrides = null, layerMeta = [] } = options;
   const pin = new Set(overrides?.pin ?? []);
@@ -64,12 +103,16 @@ export function reduceGraph(nodes, options) {
       count: all.length
     });
 
-    for (const n of chosen) {
-      modules.push({
-        id: n.id, layerId: key, label: n.label, file: n.file,
-        summary: n.summary, deps: n.deps
-      });
-    }
+    // Eigene Objekte statt der Eingabeknoten befuellen: disambiguateLabels
+    // darf gleich anschliessend Labels umschreiben, ohne die von aussen
+    // hereingereichten nodes zu mutieren — reduceGraph bleibt eine reine
+    // Funktion.
+    const layerModules = chosen.map((n) => ({
+      id: n.id, layerId: key, label: n.label, file: n.file,
+      summary: n.summary, deps: n.deps
+    }));
+    disambiguateLabels(layerModules);
+    modules.push(...layerModules);
 
     const dropped = all.length - chosen.length;
     if (dropped > 0) {

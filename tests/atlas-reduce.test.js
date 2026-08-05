@@ -157,3 +157,39 @@ test("labels-Override schlaegt die Layer-Metadaten", () => {
   });
   assert.equal(atlas.layers.find((l) => l.id === "agent").label, "Eigener Titel");
 });
+
+// Regressionstests fuer die Label-Disambiguierung (Review-Finding 1): zwei
+// __init__.py aus verschiedenen Verzeichnissen im selben Layer duerfen nicht
+// als zwei identisch beschriftete Punkte in der Szene landen.
+
+test("zwei gleiche Basenamen im selben Layer werden disambiguiert", () => {
+  const nodes = [
+    { id: "a", label: "__init__.py", file: "src/__init__.py", layer: "agent", summary: "", deps: [] },
+    { id: "b", label: "__init__.py", file: "src/agent/__init__.py", layer: "agent", summary: "", deps: [] }
+  ];
+  const atlas = reduceGraph(nodes, OPTS);
+  const labels = atlas.modules.map((m) => m.label).sort();
+  assert.deepEqual(labels, ["agent/__init__.py", "src/__init__.py"]);
+});
+
+test("derselbe Basename in VERSCHIEDENEN Layern bleibt unangetastet", () => {
+  const nodes = [
+    { id: "a", label: "__init__.py", file: "src/__init__.py", layer: "agent", summary: "", deps: [] },
+    { id: "b", label: "__init__.py", file: "tests/__init__.py", layer: "test", summary: "", deps: [] }
+  ];
+  const atlas = reduceGraph(nodes, OPTS);
+  const labels = atlas.modules.map((m) => m.label).sort();
+  assert.deepEqual(labels, ["__init__.py", "__init__.py"]);
+});
+
+test("Dreier-Kollision: alle drei werden eindeutig disambiguiert", () => {
+  const nodes = [
+    { id: "a", label: "utils.py", file: "src/a/utils.py", layer: "ui", summary: "", deps: [] },
+    { id: "b", label: "utils.py", file: "src/b/utils.py", layer: "ui", summary: "", deps: [] },
+    { id: "c", label: "utils.py", file: "src/c/utils.py", layer: "ui", summary: "", deps: [] }
+  ];
+  const atlas = reduceGraph(nodes, OPTS);
+  const labels = atlas.modules.map((m) => m.label);
+  assert.equal(new Set(labels).size, 3, "alle drei Labels muessen sich unterscheiden");
+  assert.deepEqual(labels.slice().sort(), ["a/utils.py", "b/utils.py", "c/utils.py"]);
+});

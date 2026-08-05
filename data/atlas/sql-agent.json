@@ -18,7 +18,7 @@
       "id": "infrastructure",
       "label": "Infrastruktur & Konfiguration",
       "summary": "Lokale Postgres-16-Umgebung via Docker Compose, Umgebungsvariablen für LLM-Provider und DB-Zugang, Python-Build- und Abhängigkeitsdefinition sowie die Konfiguration des Analyse-Tooling.",
-      "count": 6
+      "count": 4
     },
     {
       "id": "test",
@@ -97,7 +97,7 @@
     {
       "id": "file:src/__init__.py",
       "layerId": "agent",
-      "label": "__init__.py",
+      "label": "src/__init__.py",
       "file": "src/__init__.py",
       "summary": "Leerer Package-Marker, der src als Python-Package nutzbar macht (nötig für Aufrufe wie python -m src.agent.graph).",
       "deps": []
@@ -105,7 +105,7 @@
     {
       "id": "file:src/agent/__init__.py",
       "layerId": "agent",
-      "label": "__init__.py",
+      "label": "agent/__init__.py",
       "file": "src/agent/__init__.py",
       "summary": "Leerer Package-Marker für das Agent-Package src.agent (graph, guardrails, tools, llm, prompts).",
       "deps": []
@@ -146,14 +146,6 @@
       ]
     },
     {
-      "id": "file:.ua/.understandignore",
-      "layerId": "infrastructure",
-      "label": ".understandignore",
-      "file": ".ua/.understandignore",
-      "summary": "Ignore-Liste des Analyse-Tools Understand-Anything; legt fest, welche Pfade beim Codebase-Scan ausgeklammert werden. Kein Projekt-Quellcode.",
-      "deps": []
-    },
-    {
       "id": "document:requirements.txt",
       "layerId": "infrastructure",
       "label": "requirements.txt",
@@ -162,16 +154,6 @@
       "deps": [
         "config:pyproject.toml",
         "file:src/app.py"
-      ]
-    },
-    {
-      "id": "config:.ua/config.json",
-      "layerId": "infrastructure",
-      "label": "config.json",
-      "file": ".ua/config.json",
-      "summary": "Konfiguration des Analyse-Tools Understand-Anything; setzt lediglich die Ausgabesprache. Kein Projekt-Quellcode.",
-      "deps": [
-        "file:.ua/.understandignore"
       ]
     },
     {

@@ -34,6 +34,15 @@ function stripLayerPrefix(id) {
   return id.startsWith(LAYER_ID_PREFIX) ? id.slice(LAYER_ID_PREFIX.length) : id;
 }
 
+// Understand-Anything legt sein eigenes Arbeitsverzeichnis .ua/ INNERHALB des
+// gescannten Repos ab (Config, Ignore-Datei, ...). Das sind Artefakte des
+// Analyse-Tools, nicht des analysierten Projekts, und duerfen der Szene nicht
+// als Projekt-Modul praesentiert werden. .ua/ ist das feste Arbeitsverzeichnis
+// des Tools, der Filter gilt also automatisch fuer jedes kuenftige Repo.
+function isToolArtifact(filePath) {
+  return str(filePath).startsWith(".ua/");
+}
+
 export function normalizeGraph(raw) {
   const rawNodes = asArray(raw?.nodes);
   const rawLayers = asArray(raw?.layers);
@@ -51,7 +60,10 @@ export function normalizeGraph(raw) {
   for (const l of rawLayers) {
     if (!l || typeof l !== "object" || !str(l.id)) continue;
     const key = stripLayerPrefix(l.id);
-    const members = asArray(l.nodeIds).filter((id) => nodeById.has(id));
+    const members = asArray(l.nodeIds).filter((id) => {
+      const n = nodeById.get(id);
+      return n && !isToolArtifact(n.filePath);
+    });
     if (members.length === 0) continue;
     for (const id of members) {
       // Erster Treffer gewinnt: der echte Graph kennt keine Mehrfach-
