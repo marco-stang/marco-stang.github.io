@@ -115,3 +115,26 @@ test("leere Eingabe liefert einen leeren, gueltigen Atlas", () => {
   assert.deepEqual(atlas.modules, []);
   assert.equal(atlas.id, "sql-agent");
 });
+
+test("ist deterministisch auch bei identischen Fan-in/deps-Ties auf gemeinsamer Datei", () => {
+  // Baue Knoten auf gemeinsamer Datei, die nach Fan-in und deps.length identisch sind.
+  // Ohne Tiebreak auf id haengt Sortierung von Input-Reihenfolge ab.
+  const shared = [
+    { id: "z-leaf", label: "z.py", file: "src/helpers.py", layer: "util", summary: "z", deps: [] },
+    { id: "a-leaf", label: "a.py", file: "src/helpers.py", layer: "util", summary: "a", deps: [] },
+    { id: "m-leaf", label: "m.py", file: "src/helpers.py", layer: "util", summary: "m", deps: [] },
+  ];
+  // Gleiche Knoten, unterschiedliche Reihenfolge.
+  const order1 = [...shared];
+  const order2 = [shared[2], shared[0], shared[1]]; // Permutation
+
+  const atlas1 = reduceGraph(order1, OPTS);
+  const atlas2 = reduceGraph(order2, OPTS);
+
+  // Beide muessen identisches JSON erzeugen.
+  assert.equal(
+    JSON.stringify(atlas1),
+    JSON.stringify(atlas2),
+    "Atlas muss identisch sein unabhaengig von Input-Reihenfolge bei Ties"
+  );
+});

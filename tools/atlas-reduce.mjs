@@ -8,14 +8,16 @@ export const MAX_MODULES_PER_LAYER = 8;
 const FALLBACK_LAYER = "sonstiges";
 
 // Deterministische Sortierung: Fan-in absteigend, dann Fan-out absteigend,
-// dann Pfad alphabetisch. Ohne die letzte Stufe waere die Reihenfolge bei
-// Gleichstand von der Eingabereihenfolge abhaengig und ein erneuter
-// Generatorlauf erzeugte grundlos ein Diff.
+// dann Pfad alphabetisch, dann id alphabetisch. Ohne die letzte Stufe waere die
+// Reihenfolge bei Gleichstand von der Eingabereihenfolge abhaengig und ein
+// erneuter Generatorlauf erzeugte grundlos ein Diff. File ist nicht eindeutig
+// (mehrere Knoten pro Datei), nur id garantiert Totalordnung.
 function byRelevance(fanIn) {
   return (a, b) =>
     (fanIn.get(b.id) ?? 0) - (fanIn.get(a.id) ?? 0) ||
     b.deps.length - a.deps.length ||
-    (a.file || a.id).localeCompare(b.file || b.id);
+    (a.file || a.id).localeCompare(b.file || b.id) ||
+    a.id.localeCompare(b.id);
 }
 
 export function reduceGraph(nodes, options) {
