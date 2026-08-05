@@ -52,8 +52,9 @@ zu lassen, würde genau das Prinzip verletzen, das die Seite trägt.
 
 - Die Planeten-Geometrie liegt **nicht** in `assets/js/sky-v3.js` — das ist
   Canvas-Hintergrund (Nebel, Sterne, Sternschnuppen). Sie liegt in der
-  `computeLayout`-Methode im `<script type="text/x-dc">`-Block von
-  `index.html` (ca. Zeile 780–876).
+  Methode `layout(D)` im `<script type="text/x-dc">`-Block von `index.html`
+  (Zeile 796–876), aufgerufen aus `renderVals` (Zeile 909). Die Kamera ist
+  `stageTransform()` (Zeile 691–696), die den Buehnen-Transform liefert.
 - Dieser Template-Block ist normaler App-Code und darf bearbeitet werden.
   `assets/js/dc-support.js` ist die generierte Runtime mit „do not edit" im
   Header und **wird nicht angefasst**.
@@ -183,17 +184,22 @@ wenig davon abhängt.
 ### Kamerafahrt (Ansatz A)
 
 Beim Wechsel 1 → 2 wird der aktive Planet zum Ursprung der Layout-Berechnung:
-`computeLayout` bekommt einen zweiten Modus, in dem `ox`/`oy` nicht die
-Bildschirmmitte, sondern die Planetenposition sind, und die Ringe aus
-`layers[]` statt aus den Clustern kommen. Die restliche Szene (Sonne, andere
-Planeten, Cluster-Ringe) bleibt gerendert, dimmt aber stark ab — der
-vorhandene `focusId`-Dimm-Pfad (index.html:872) wird dafür erweitert, nicht
-ersetzt.
+`layout(D)` bekommt einen zweiten Modus, in dem die Ringe um die
+Planetenposition statt um die Bildschirmmitte liegen und aus `layers[]` statt
+aus den Clustern kommen. Die restliche Szene (Sonne, andere Planeten,
+Cluster-Ringe) bleibt gerendert, dimmt aber stark ab — der vorhandene
+`focusId`-Dimm-Pfad (index.html:872) wird dafür erweitert, nicht ersetzt.
 
-Der Übergang läuft über dieselbe CSS-Transition wie der bestehende Zoom, nicht
-über eine eigene Animations-Engine. Bei `prefers-reduced-motion` entfällt der
-Flug und die Stufe wechselt als harter Schnitt — konsistent mit Boot-Sequenz
-und Starfield, die das schon so handhaben.
+Die Kamerafahrt selbst braucht **keine eigene Animations-Engine**: der
+Skalierungsursprung der Bühne (`transform-origin`) wandert von der Mitte auf
+die Planetenposition, und der vorhandene Zoomfaktor in `stageTransform()`
+(index.html:691–696) wird angehoben. Dadurch bleibt der Planet beim Hochregeln
+stehen, während die Szene um ihn herum wächst — das liest sich als Hineinfliegen
+und läuft über dieselbe `transform`-Transition, die der Zoom schon benutzt.
+
+Bei `prefers-reduced-motion` entfällt der Flug und die Stufe wechselt als
+harter Schnitt — konsistent mit Boot-Sequenz und Starfield, die das schon so
+handhaben.
 
 Zurück: Regler runter, `Esc`, oder Fenster schließen → zurück auf Stufe 1 und
 in die Ausgangsansicht. Es gibt keinen Zustand, aus dem der Besucher nicht mit
