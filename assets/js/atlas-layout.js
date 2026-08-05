@@ -48,7 +48,16 @@ export function computeAtlasLayout(atlas, opts) {
   // negatives rx laesst den Browser die Ellipse verwerfen.
   const roomX = Math.max(innerRx, Math.min(cx, w - cx) - 12);
   const roomY = Math.max(innerRx * ASPECT, Math.min(cy, h - cy) - 12);
-  const maxRx = Math.max(innerRx, Math.min(roomX, roomY / ASPECT));
+  // opts.maxRadius (Fix-Runde 2 des Code-Atlas-Reviews): optionale, vom
+  // Aufrufer gesetzte zusaetzliche Obergrenze — z.B. "so gross wie die freie
+  // Flaeche neben einem Projektfenster ist", damit die Ringe nicht darunter
+  // laufen. Rein additiv: ohne die Option (Infinity) verhaelt sich maxRx
+  // exakt wie zuvor. Das aeussere Math.max(innerRx, ...) bleibt unveraendert
+  // aussen vor — es garantiert weiterhin strikt positive Radien, selbst wenn
+  // ein Aufrufer einen unsinnig kleinen maxRadius uebergibt (dann kollabieren
+  // alle Ringe auf innerRx; das ist eine bewusste Prioritaet: "sichtbar,
+  // aber gestaucht" schlaegt "unsichtbar/negativ").
+  const maxRx = Math.max(innerRx, Math.min(roomX, roomY / ASPECT, opts.maxRadius ?? Infinity));
 
   // Dynamischer Abstieg zwischen Ringen: wenn der feste Abstieg nicht in den
   // verfuegbaren Platz passt (zB bei 6 Layers auf schmalem Viewport), wird er

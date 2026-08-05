@@ -738,38 +738,86 @@ class Component extends DCLogic {
   // das Fenster wieder breit, kommt die gewaehlte Tiefe zurueck.
   atlasMaxLevel() { return this._atlasLayout ? this._atlasLayout.maxLevelFor(this.state.w) : 1; }
   atlasLevelEff() { return Math.min(this.state.atlasLevel, this.atlasMaxLevel()); }
-  stageTransform() {
+  // Eine Quelle fuer Panelbreite (Fix-Runde 2): die Kamerarechnung braucht
+  // die Zahl, das <aside>-Layout den clamp()-String. Beides aus denselben
+  // drei Werten, damit sie nie auseinanderlaufen koennen. isChat ist bei
+  // Atlas-Aufrufen immer false — der Atlas erscheint nur an einem
+  // Projekt-Host (this.state.active === echte Projekt-id), nie am Chat.
+  panelWidth(isChat) {
+    const [min, vw, max] = isChat ? [320, 66, 780] : [320, 46, 560];
+    return { css: `clamp(${min}px,${vw}vw,${max}px)`, px: Math.min(max, Math.max(min, (vw / 100) * this.state.w)) };
+  }
+  // Buehnenskalierung: Basis (Fokus-Boost + Mausrad-Zoom) und zusaetzlicher
+  // Atlas-Faktor. layout() (Ring-Obergrenze) und stageTransform() (Kamera)
+  // muessen exakt denselben Wert sehen, sonst laufen Ring-Clamping und
+  // Kamerarahmung auseinander — deshalb eine Methode statt zweimal derselben
+  // Formel (Fix-Runde 2).
+  stageScale() {
     const D = this.state.D, act = this.state.active;
     const focused = !!act && act !== D?.TERM_ID;
+    const baseScale = focused ? this._zoom * 1.25 : this._zoom;
+    const atlasBoost = this.atlasLevelEff() > 1 && this._atlasHost ? 1.35 : 1;
+    return { baseScale, atlasBoost, scale: baseScale * atlasBoost };
+  }
+  // Ob die Buehne so schmal ist, dass die Fix-Runde-2-Rahmung (freie Flaeche
+  // neben dem Projektfenster) keinen sinnvollen Platz mehr findet. Das
+  // Fenster hat eine feste Mindestbreite von 320px (siehe panelWidth()); bei
+  // z.B. 375px waere die freie Flaeche nur 55px breit, ihre Mitte laege
+  // 27.5px vom Rand entfernt — Host und Ringe wuerden dorthin gequetscht
+  // statt sichtbar zu bleiben. Deshalb bleibt unterhalb von NARROW_VIEWPORT
+  // (dieselbe Schwelle wie in atlas-layout.js) das in Fix-Runde 1 bereits
+  // verifizierte Verhalten aktiv (Host bleibt ortsfest stehen), statt eine
+  // dort ungetestete Formel zu erzwingen. layout() (Ring-Obergrenze) und
+  // stageTransform() (Kamera) fragen beide diese eine Methode.
+  isNarrowAtlas() {
+    return this.state.w < (this._atlasLayout ? this._atlasLayout.NARROW_VIEWPORT : 760);
+  }
+  stageTransform() {
+    const D = this.state.D, act = this.state.active;
     const shift = act && act !== D?.TERM_ID ? -Math.min(230, this.state.w * 0.16) : 0;
-    // Kamerafahrt, Fix-Runde 1 (Task-8-Review): transform-origin NICHT mehr
-    // auf den Planeten legen. Origin und Scale gleichzeitig zu animieren
+    // Kamerafahrt, Fix-Runde 1 (Task-8-Review): transform-origin bleibt fest
+    // in der Buehnenmitte (CSS-Default "50% 50%", siehe sceneTransform) statt
+    // auf dem Planeten zu liegen. Origin UND Scale gleichzeitig zu animieren
     // liess den Planeten selbst mitwandern (gemessen: 97.7px Schwenk waehrend
     // der 0.42s), weil ein wandernder Ursprung jeden Bildpunkt um sich herum
-    // mitzieht -- auch den, der eigentlich stehen bleiben soll.
+    // mitzieht -- auch den, der eigentlich stehen bleiben soll. Stattdessen
+    // haelt ein berechnetes Translate T den Planeten dort, wo er hin soll.
     //
-    // Stattdessen bleibt der Skalierungsursprung fest in der Buehnenmitte c
-    // (CSS-Default "50% 50%", siehe sceneTransform) und der Planet wird per
-    // Ausgleichs-Translate E ortsfest gehalten. Herleitung: fuer einen Punkt p
-    // mit Ursprung c, Translate T und Skalierung S gilt
-    //   p_screen = c + T + S * (p - c)
-    // Stufe 1 (kein Atlas):     p1 = c + T + S1 * (p - c)
-    // Stufe >=2 (Atlas, Host h): p2 = c + T + E + S2 * (p - c),  S2 = S1 * atlasBoost
-    // Damit der Host h beim Uebergang stehen bleibt, muss p2(h) = p1(h) sein:
-    //   E = (S1 - S2) * (h - c) = (1 - atlasBoost) * S1 * (h - c)
-    // atlasBoost ist konstant 1.35, also E = -0.35 * S1 * (h - c). Ohne
-    // Atlas-Host ist E = (0, 0) -- der Nicht-Atlas-Fall skaliert unveraendert
-    // um die Mitte, translate(x, 0) ist aequivalent zum vorherigen translateX(x).
-    const atlasBoost = this.atlasLevelEff() > 1 && this._atlasHost ? 1.35 : 1;
-    const baseScale = focused ? this._zoom * 1.25 : this._zoom;
-    const scale = baseScale * atlasBoost;
-    let ex = 0, ey = 0;
+    // Fix-Runde 2 (Playwright-Messung, Marcos Entscheidung): "Host bleibt
+    // exakt stehen" (Runde 1) verdeckte den Atlas hinter dem Projektfenster —
+    // 21 von 24 Modulknoten lagen unterm <aside>, weil sql-agent rechts liegt
+    // und der 1.35x-Atlas-Zoom genau dorthin waechst. Der Planet wandert jetzt
+    // bewusst EINMALIG in die Mitte der freien Flaeche links vom Fenster —
+    // das IST die Kamerafahrt. Mechanismus unveraendert (fester Ursprung c,
+    // berechnetes Translate T), nur das Ziel aendert sich. Mit demselben
+    // Modell wie Runde 1 (p_screen = c + T + S*(p - c), c = Buehnenmitte
+    // (w/2, h/2)) gesucht: T, sodass p_screen(host) in der Mitte der freien
+    // Flaeche landet:
+    //   freeWidth   = w - panelPx      (panelPx exakt wie <aside>, siehe panelWidth())
+    //   freeCenterX = freeWidth / 2
+    //   freeCenterY = h / 2            (senkrecht bleibt es die Buehnenmitte)
+    //   Tx = freeCenterX - c.x - S * (host.x - c.x)
+    //   Ty = freeCenterY - c.y - S * (host.y - c.y)
+    // Ersetzt shift UND das E aus Runde 1 vollstaendig (nicht addiert) — shift
+    // war ohnehin nur eine grobe Naeherung fuer "Platz fuers Fenster lassen",
+    // die hier direkt und exakt in Tx steckt. Ohne Atlas-Host (atlasBoost===1)
+    // bleibt alles exakt wie vor Runde 1: translate(shift, 0).
+    const { baseScale, atlasBoost, scale } = this.stageScale();
+    let tx = shift, ty = 0;
     if (atlasBoost !== 1) {
       const cx = this.state.w / 2, cy = this.state.h / 2;
-      ex = (1 - atlasBoost) * baseScale * (this._atlasHost.x - cx);
-      ey = (1 - atlasBoost) * baseScale * (this._atlasHost.y - cy);
+      if (this.isNarrowAtlas()) {
+        // Runde 1: Host ortsfest halten (E-Ausgleich um die feste Buehnenmitte).
+        tx = (1 - atlasBoost) * baseScale * (this._atlasHost.x - cx);
+        ty = (1 - atlasBoost) * baseScale * (this._atlasHost.y - cy);
+      } else {
+        const freeWidth = this.state.w - this.panelWidth(false).px;
+        const freeCenterX = freeWidth / 2, freeCenterY = this.state.h / 2;
+        tx = freeCenterX - cx - scale * (this._atlasHost.x - cx);
+        ty = freeCenterY - cy - scale * (this._atlasHost.y - cy);
+      }
     }
-    return `translate(${(shift + ex).toFixed(2)}px, ${ey.toFixed(2)}px) scale(${scale.toFixed(3)})`;
+    return `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${scale.toFixed(3)})`;
   }
   zoomIn = () => { this._zoom = Math.min(1.8, Math.round((this._zoom + 0.04) * 100) / 100); this.applyZoom(); };
   zoomOut = () => { this._zoom = Math.max(0.6, Math.round((this._zoom - 0.04) * 100) / 100); this.applyZoom(); };
@@ -971,17 +1019,31 @@ class Component extends DCLogic {
     // Die Layer-/Modulringe liegen um den AKTIVEN Planeten, nicht um die Sonne.
     // Die Hauptszene bleibt gerendert und dimmt lediglich staerker ab — der
     // Besucher soll sehen, wo im System er sich befindet.
-    // _atlasHost merkt sich den Planeten fuer stageTransform(): der
-    // Ausgleichs-Translate dort haelt genau diesen Punkt beim Heranfahren
-    // ortsfest (siehe Herleitung an stageTransform()).
+    // _atlasHost merkt sich den Planeten fuer stageTransform(): dort wird die
+    // Kamera so gerahmt, dass genau dieser Punkt sichtbar bleibt (siehe
+    // Herleitung an stageTransform(), Fix-Runde 2).
     let atlasRings = [], atlasNodes = [], atlasEdges = [];
     this._atlasHost = null;
     if (this.atlasLevelEff() > 1 && this.state.atlas && this._atlasLayout) {
       const host = nodes.find((n) => n.p && n.p.id === this.state.active);
       if (host) {
         this._atlasHost = host;
+        // Ring-Obergrenze, Fix-Runde 2 (Playwright-Messung): ohne sie wuchs
+        // der aeusserste Ring bei 1280px auf ~425px Bildschirmradius, waehrend
+        // links vom Fenster nur ~360px frei sind — 21 von 24 Modulknoten lagen
+        // unterm <aside>. maxRadius ist in Buehneneinheiten, deshalb durch
+        // dieselbe Skalierung geteilt, die stageTransform() fuers Framing
+        // benutzt (this.stageScale()), sonst koennten Ring-Clamp und Kamera
+        // auseinanderlaufen. isNarrowAtlas() haelt beide Stellen an derselben
+        // Schwelle synchron (siehe Kommentar dort fuer die Begruendung, warum
+        // die Grenze unterhalb davon nicht greift).
+        let maxRadius;
+        if (!this.isNarrowAtlas()) {
+          const freeWidth = w - this.panelWidth(false).px;
+          maxRadius = (freeWidth / 2 - 24) / this.stageScale().scale;
+        }
         const out = this._atlasLayout.computeAtlasLayout(this.state.atlas, {
-          level: this.atlasLevelEff(), cx: host.x, cy: host.y, w, h
+          level: this.atlasLevelEff(), cx: host.x, cy: host.y, w, h, maxRadius
         });
         atlasRings = out.rings; atlasNodes = out.nodes; atlasEdges = out.edges;
       }
@@ -1174,8 +1236,10 @@ class Component extends DCLogic {
       // Der Chat braucht spuerbar mehr Breite als ein Projektfenster: darin
       // steckt eine komplette fremde App mit Vorschlags-Buttons und Eingabe.
       // clamp statt min, weil min(560px,46vw) auf dem Handy 172 px ergab --
-      // dort war JEDES Fenster unbenutzbar schmal.
-      panelWidth: isChat ? "clamp(320px,66vw,780px)" : "clamp(320px,46vw,560px)",
+      // dort war JEDES Fenster unbenutzbar schmal. Aus panelWidth() (Fix-
+      // Runde 2), damit CSS-String und die von der Kamera benutzte Pixelzahl
+      // nie auseinanderlaufen koennen.
+      panelWidth: this.panelWidth(isChat).css,
       resumePdf: D.RESUME.pdfUrl, resumeLinkedIn: D.RESUME.linkedinUrl,
       activeTitle: isResume ? D.RESUME.name : activeP ? activeP.title : "",
       activeSummary: isResume ? D.RESUME.intro : activeP ? activeP.summary : "",

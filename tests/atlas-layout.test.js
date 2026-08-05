@@ -135,3 +135,41 @@ test("sechs Layer bleiben bei schmalem Viewport visuell unterscheidbar", () => {
     `alle sechs rx sollten unterschiedlich sein, aber ${JSON.stringify(rxValues)} hat ${uniqueRx.size} unterschiedliche Werte`
   );
 });
+
+// Fix-Runde 2 (Task-8-Review): opts.maxRadius laesst den Aufrufer eine
+// zusaetzliche Obergrenze setzen (z.B. "so gross wie die freie Flaeche neben
+// dem Projektfenster ist"), ohne dass ein Radius negativ werden oder
+// verschwinden darf. Ohne die WIDE-Fixtur waeren die erwarteten Zahlen
+// unten nicht nachvollziehbar: 2 Layer, innerRx=74, RING_STEP=46 im breiten
+// Viewport, also ist der unbeeinflusste aeusserste Ring bei 74+46=120.
+
+test("maxRadius begrenzt den aeussersten Ring tatsaechlich", () => {
+  const unconstrained = computeAtlasLayout(ATLAS, WIDE);
+  assert.equal(unconstrained.rings[1].rx, 120, "Vorbedingung: unbeeinflusst waere der aeussere Ring 120");
+
+  const { rings } = computeAtlasLayout(ATLAS, { ...WIDE, maxRadius: 90 });
+  assert.equal(rings[1].rx, 90, "der aeusserste Ring muss exakt auf maxRadius geklemmt werden");
+  assert.ok(rings[1].rx < unconstrained.rings[1].rx, "maxRadius muss tatsaechlich verkleinern, nicht nur durchreichen");
+});
+
+test("ein absurd kleiner maxRadius liefert trotzdem strikt positive, unterscheidbare Radien", () => {
+  // 76 = innerRx(74) + 2: der denkbar knappste Wert, der noch ueber der
+  // inneren Untergrenze liegt. Kleiner als innerRx ist bewusst nicht
+  // getestet -- das aeussere Math.max(innerRx, ...) in computeAtlasLayout
+  // garantiert dort weiterhin strikt positive Radien, klemmt aber wie
+  // dokumentiert alle Ringe auf denselben Wert (innerRx). Das ist die
+  // bewusste Prioritaet "sichtbar, aber gestaucht" vor "negativ/verworfen"
+  // und kein Fehler dieses Tests.
+  const { rings } = computeAtlasLayout(ATLAS, { ...WIDE, maxRadius: 76 });
+  for (const r of rings) assert.ok(r.rx > 0, `rx=${r.rx} muss positiv sein`);
+  const uniqueRx = new Set(rings.map((r) => r.rx));
+  assert.equal(uniqueRx.size, rings.length, "Radien muessen bei knappem maxRadius unterscheidbar bleiben");
+});
+
+test("ohne maxRadius reproduziert computeAtlasLayout exakt das bisherige Ergebnis", () => {
+  const withoutOption = computeAtlasLayout(ATLAS, WIDE);
+  const withUndefined = computeAtlasLayout(ATLAS, { ...WIDE, maxRadius: undefined });
+  assert.deepEqual(withoutOption, withUndefined, "maxRadius: undefined muss sich wie Weglassen verhalten");
+  assert.equal(withoutOption.rings[0].rx, 74);
+  assert.equal(withoutOption.rings[1].rx, 120);
+});
