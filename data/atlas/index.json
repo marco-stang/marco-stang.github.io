@@ -1,0 +1,10 @@
+{
+  "projects": {
+    "sql-agent": {
+      "repo": "sql-copilot",
+      "layers": 6,
+      "modules": 26
+    }
+  },
+  "generatedAt": "2026-08-05"
+}

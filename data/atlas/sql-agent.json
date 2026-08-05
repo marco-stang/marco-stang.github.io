@@ -1,0 +1,325 @@
+{
+  "id": "sql-agent",
+  "repo": "sql-copilot",
+  "generatedAt": "2026-08-05",
+  "source": {
+    "tool": "understand-anything",
+    "version": "1.0.0",
+    "license": "MIT"
+  },
+  "layers": [
+    {
+      "id": "agent",
+      "label": "Agenten-Kern",
+      "summary": "LangGraph-Orchestrierung des Ablaufs get_schema → generate_sql → validate_sql → execute_sql → answer samt Selbstkorrektur-Loop, SQL-Guardrails (SELECT/WITH-Whitelist, erzwungenes LIMIT, EXPLAIN-Pre-Check), Prompt-Templates, DB-Tool-Bindings und providerunabhängigem LLM-Setup.",
+      "count": 7
+    },
+    {
+      "id": "infrastructure",
+      "label": "Infrastruktur & Konfiguration",
+      "summary": "Lokale Postgres-16-Umgebung via Docker Compose, Umgebungsvariablen für LLM-Provider und DB-Zugang, Python-Build- und Abhängigkeitsdefinition sowie die Konfiguration des Analyse-Tooling.",
+      "count": 6
+    },
+    {
+      "id": "test",
+      "label": "Tests & Evaluation",
+      "summary": "Pytest-Suite für die Guardrails (läuft ohne DB und LLM) sowie der Eval-Harness, der die 15 Referenzfragen gegen den Agenten laufen lässt und Ergebniswerte statt SQL-Text mit der Referenz-SQL vergleicht.",
+      "count": 4
+    },
+    {
+      "id": "data",
+      "label": "Datenebene",
+      "summary": "Zugriff auf die Olist-Postgres-Datenbank über SQLAlchemy mit dem eingeschränkten agent_readonly-User, der einmalige CSV-Import der 9 Tabellen sowie die Schema-Dokumentation inklusive Umsatz-Regel (order_items.price statt payments.payment_value).",
+      "count": 3
+    },
+    {
+      "id": "documentation",
+      "label": "Dokumentation",
+      "summary": "Portfolio-README mit Quickstart, Security-by-Design-Abschnitt und Eval-Tabelle, der begleitende Lernpfad zum Projekt sowie die Datenbasis des Architekturdiagramms.",
+      "count": 3
+    },
+    {
+      "id": "ui",
+      "label": "Präsentationsebene",
+      "summary": "Streamlit-Dashboard im 2x2-Grid (Chat, ER-Diagramm, Live-DB-Schema, Agent-Architektur) mit handgebauten HTML/CSS/SVG-Diagrammen, Guardrail-Badges und dem Petrol/Teal-Theme statt Streamlit-Standardoptik.",
+      "count": 3
+    }
+  ],
+  "modules": [
+    {
+      "id": "file:src/agent/graph.py",
+      "layerId": "agent",
+      "label": "graph.py",
+      "file": "src/agent/graph.py",
+      "summary": "Herzstück des Projekts: verdrahtet die LangGraph-Nodes get_schema → generate_sql → validate_sql → execute_sql → answer inklusive Selbstkorrektur-Loop (max. 3 Versuche) bei Guardrail- oder Ausführungsfehlern. Definiert den AgentState und bietet eine CLI-Einstiegsmöglichkeit über run().",
+      "deps": [
+        "file:src/agent/guardrails.py",
+        "file:src/agent/llm.py",
+        "file:src/agent/prompts.py",
+        "file:src/agent/tools.py",
+        "file:src/db.py"
+      ]
+    },
+    {
+      "id": "file:src/agent/guardrails.py",
+      "layerId": "agent",
+      "label": "guardrails.py",
+      "file": "src/agent/guardrails.py",
+      "summary": "Herzstück der Sicherheitsschicht: prüft vom LLM erzeugtes SQL gegen eine Whitelist (nur SELECT/WITH, genau ein Statement, keine Kommentare), erzwingt ein LIMIT und verifiziert die Query per EXPLAIN gegen die Datenbank, bevor sie wirklich ausgeführt wird.",
+      "deps": [
+        "file:tests/test_guardrails.py"
+      ]
+    },
+    {
+      "id": "file:src/agent/llm.py",
+      "layerId": "agent",
+      "label": "llm.py",
+      "file": "src/agent/llm.py",
+      "summary": "Providerunabhängiges LLM-Setup: liest LLM_PROVIDER und LLM_MODEL aus der Umgebung und erzeugt darüber via LangChains init_chat_model das Chat-Modell. Dadurch bleibt der Agent an keinen einzelnen Anbieter gebunden.",
+      "deps": []
+    },
+    {
+      "id": "file:src/agent/prompts.py",
+      "layerId": "agent",
+      "label": "prompts.py",
+      "file": "src/agent/prompts.py",
+      "summary": "Sammelt alle Prompt-Templates und die Builder-Funktionen, die daraus konkrete LangChain-Message-Listen bauen — für die SQL-Generierung (inkl. Retry-Variante mit vorheriger Query und Fehlermeldung) und für die Beantwortung in natürlicher Sprache.",
+      "deps": []
+    },
+    {
+      "id": "file:src/agent/tools.py",
+      "layerId": "agent",
+      "label": "tools.py",
+      "file": "src/agent/tools.py",
+      "summary": "Kapselt die beiden Datenbank-Operationen, die der LangGraph-Agent braucht: Schema-Introspektion fuer das SQL-Prompt und Ausfuehrung einer bereits validierten Query. Beide Funktionen bekommen die SQLAlchemy-Engine per Parameter, damit sie ohne .env-Setup einzeln testbar bleiben.",
+      "deps": []
+    },
+    {
+      "id": "file:src/__init__.py",
+      "layerId": "agent",
+      "label": "__init__.py",
+      "file": "src/__init__.py",
+      "summary": "Leerer Package-Marker, der src als Python-Package nutzbar macht (nötig für Aufrufe wie python -m src.agent.graph).",
+      "deps": []
+    },
+    {
+      "id": "file:src/agent/__init__.py",
+      "layerId": "agent",
+      "label": "__init__.py",
+      "file": "src/agent/__init__.py",
+      "summary": "Leerer Package-Marker für das Agent-Package src.agent (graph, guardrails, tools, llm, prompts).",
+      "deps": []
+    },
+    {
+      "id": "service:docker-compose.yml",
+      "layerId": "infrastructure",
+      "label": "docker-compose.yml",
+      "file": "docker-compose.yml",
+      "summary": "Fährt einen einzelnen Postgres-16-Container als lokale Entwicklungsdatenbank hoch: Datenbank olist, Admin-User admin, Port 5432 nach außen gemappt und ein benanntes Volume pgdata für dauerhafte Speicherung.",
+      "deps": [
+        "file:src/db.py",
+        "file:src/load_olist.py"
+      ]
+    },
+    {
+      "id": "config:.env.example",
+      "layerId": "infrastructure",
+      "label": ".env.example",
+      "file": ".env.example",
+      "summary": "Vorlage für die lokale .env-Datei: legt die Postgres-Verbindung über den read-only User agent_readonly fest und steuert per LLM_PROVIDER/LLM_MODEL, welches LangChain-Integrationspaket der Agent nutzt. API-Keys für Anthropic und OpenAI bleiben bewusst leer.",
+      "deps": [
+        "file:src/agent/llm.py",
+        "file:src/db.py",
+        "service:docker-compose.yml"
+      ]
+    },
+    {
+      "id": "config:pyproject.toml",
+      "layerId": "infrastructure",
+      "label": "pyproject.toml",
+      "file": "pyproject.toml",
+      "summary": "Paketdefinition des Projekts sql-agent mit setuptools-Build-Backend: bündelt die Laufzeit-Abhängigkeiten (LangGraph, LangChain samt Anthropic-/OpenAI-Integration, SQLAlchemy, psycopg2, Streamlit, pandas) und stellt pytest als optionales dev-Extra bereit.",
+      "deps": [
+        "file:src/agent/graph.py",
+        "file:src/app.py",
+        "file:tests/test_guardrails.py"
+      ]
+    },
+    {
+      "id": "file:.ua/.understandignore",
+      "layerId": "infrastructure",
+      "label": ".understandignore",
+      "file": ".ua/.understandignore",
+      "summary": "Ignore-Liste des Analyse-Tools Understand-Anything; legt fest, welche Pfade beim Codebase-Scan ausgeklammert werden. Kein Projekt-Quellcode.",
+      "deps": []
+    },
+    {
+      "id": "document:requirements.txt",
+      "layerId": "infrastructure",
+      "label": "requirements.txt",
+      "file": "requirements.txt",
+      "summary": "Exakt gepinnte Versionsliste aller elf Laufzeit-Abhängigkeiten (LangGraph, LangChain-Pakete, SQLAlchemy, psycopg2-binary, Streamlit, pandas, PyYAML) für reproduzierbare Deployments, insbesondere des Streamlit-Cloud-Dashboards.",
+      "deps": [
+        "config:pyproject.toml",
+        "file:src/app.py"
+      ]
+    },
+    {
+      "id": "config:.ua/config.json",
+      "layerId": "infrastructure",
+      "label": "config.json",
+      "file": ".ua/config.json",
+      "summary": "Konfiguration des Analyse-Tools Understand-Anything; setzt lediglich die Ausgabesprache. Kein Projekt-Quellcode.",
+      "deps": [
+        "file:.ua/.understandignore"
+      ]
+    },
+    {
+      "id": "file:evals/run_evals.py",
+      "layerId": "test",
+      "label": "run_evals.py",
+      "file": "evals/run_evals.py",
+      "summary": "Eval-Runner, der den Agenten alle Fragen aus questions.yaml beantworten lässt und sein SQL-Ergebnis mit dem der handgeschriebenen Referenz-SQL vergleicht. Vergleicht bewusst Ergebniswerte statt SQL-Text und schreibt den Report nach evals/results.md.",
+      "deps": [
+        "file:src/agent/graph.py",
+        "file:src/agent/llm.py",
+        "file:src/db.py"
+      ]
+    },
+    {
+      "id": "file:tests/test_guardrails.py",
+      "layerId": "test",
+      "label": "test_guardrails.py",
+      "file": "tests/test_guardrails.py",
+      "summary": "pytest-Suite für die Guardrails: prüft, dass SELECT/WITH erlaubt, DDL/DML sowie Mehrfach-Statements und SQL-Kommentare blockiert werden und dass das LIMIT korrekt ergänzt bzw. ein vorhandenes LIMIT unangetastet bleibt. Läuft ohne Datenbank und ohne LLM.",
+      "deps": [
+        "file:src/agent/guardrails.py"
+      ]
+    },
+    {
+      "id": "document:evals/results.md",
+      "layerId": "test",
+      "label": "results.md",
+      "file": "evals/results.md",
+      "summary": "Eval-Report des Agenten: 8 von 15 Fragen korrekt (53 %), aufgeschlüsselt pro Frage mit Status und Anzahl der Versuche. Erklärt zudem die Vergleichsmethode (Werte-Teilmengen-Vergleich statt SQL-Textvergleich).",
+      "deps": [
+        "file:evals/run_evals.py"
+      ]
+    },
+    {
+      "id": "config:evals/questions.yaml",
+      "layerId": "test",
+      "label": "questions.yaml",
+      "file": "evals/questions.yaml",
+      "summary": "Eval-Datensatz mit 15 Referenzfragen an die Olist-Datenbank, jeweils mit handgeschriebener Referenz-SQL und Schwierigkeitsstufe (Grundlagen, Joins, Window Functions). Grundlage für den Eval-Runner.",
+      "deps": [
+        "file:evals/run_evals.py"
+      ]
+    },
+    {
+      "id": "file:src/db.py",
+      "layerId": "data",
+      "label": "db.py",
+      "file": "src/db.py",
+      "summary": "Zentrale SQLAlchemy-Verbindungsschicht des Agenten: baut die Engine immer fuer den eingeschraenkten agent_readonly-User, konfigurierbar ueber DATABASE_URL aus der .env. Bildet die zweite, von den Anwendungs-Guardrails unabhaengige Verteidigungslinie (Defense in Depth).",
+      "deps": []
+    },
+    {
+      "id": "file:src/load_olist.py",
+      "layerId": "data",
+      "label": "load_olist.py",
+      "file": "src/load_olist.py",
+      "summary": "Einmaliges Import-Skript: liest die 9 rohen Olist-CSVs aus data/raw, wandelt Datums-/Zeitspalten in echte datetime-Typen um und schreibt sie per pandas to_sql als Tabellen nach Postgres (Admin-User, if_exists=\"replace\").",
+      "deps": []
+    },
+    {
+      "id": "document:docs/schema.md",
+      "layerId": "data",
+      "label": "schema.md",
+      "file": "docs/schema.md",
+      "summary": "Dokumentation des Olist-Datenbankschemas mit allen 9 Tabellen, ihren Verknüpfungen und einer Leseanleitung für das ER-Diagramm. Hält zusätzlich die zentrale Umsatz-Regel fest: Umsatz über SUM(order_items.price), nicht über payments.payment_value.",
+      "deps": [
+        "file:src/load_olist.py",
+        "file:src/agent/prompts.py"
+      ]
+    },
+    {
+      "id": "document:LEARNING-PATH.md",
+      "layerId": "documentation",
+      "label": "LEARNING-PATH.md",
+      "file": "LEARNING-PATH.md",
+      "summary": "Ausführlicher Lern- und Interview-Leitfaden zum Projekt: Elevator-Pitch, Architektur-Überblick mit Zuordnung aller Quelldateien, sechs vertiefende Stationen (LangGraph-State, Guardrails, Selbstkorrektur, Schema-Exploration, Umsatz-Fallstrick, Provider-Setup), ehrliche Grenzen sowie eine Recruiter-Simulation mit Abschluss-Checkliste.",
+      "deps": [
+        "file:src/agent/graph.py",
+        "file:src/agent/guardrails.py",
+        "file:src/agent/tools.py",
+        "file:src/agent/llm.py",
+        "file:src/agent/prompts.py",
+        "file:src/db.py",
+        "file:src/load_olist.py",
+        "file:src/app.py",
+        "file:tests/test_guardrails.py",
+        "file:evals/run_evals.py",
+        "document:docs/schema.md",
+        "document:evals/results.md"
+      ]
+    },
+    {
+      "id": "document:README.md",
+      "layerId": "documentation",
+      "label": "README.md",
+      "file": "README.md",
+      "summary": "Projekt-Einstiegsdokument für GitHub: Kurzvorstellung des LangGraph-Agenten mit Live-Demo-Link und Demo-Screenshot, Begründung der Whitelist-statt-Blacklist-Entscheidung, Architekturüberblick, Eval-Ergebnis samt Limitierungen und ein Quickstart zum Nachbauen.",
+      "deps": [
+        "file:src/agent/guardrails.py",
+        "file:src/app.py",
+        "file:src/load_olist.py",
+        "document:docs/schema.md",
+        "config:.env.example",
+        "service:docker-compose.yml"
+      ]
+    },
+    {
+      "id": "config:docs/architecture.json",
+      "layerId": "documentation",
+      "label": "architecture.json",
+      "file": "docs/architecture.json",
+      "summary": "Deklarative Beschreibung des Agent-Architektur-Diagramms (Knoten, Kanten, Positionen, Akzentfarbe) für den LangGraph-Ablauf get_schema → generate_sql → validate_sql → execute_sql → answer inklusive Selbstkorrektur-Schleifen.",
+      "deps": [
+        "file:src/agent/graph.py",
+        "file:src/app.py"
+      ]
+    },
+    {
+      "id": "file:src/app.py",
+      "layerId": "ui",
+      "label": "app.py",
+      "file": "src/app.py",
+      "summary": "Streamlit-Dashboard des SQL Copilot: zeigt Chat, ER-Diagramm, Live-DB-Schema und Agent-Architektur gleichzeitig in einem 2x2-Grid. Enthaelt ausschliesslich Darstellungslogik — die Agent-Logik wird ueber run() aus graph.py aufgerufen — und macht Guardrail-Checks sowie den Selbstkorrektur-Loop als Badges und aufklappbare Versuchsprotokolle sichtbar.",
+      "deps": [
+        "file:src/agent/graph.py",
+        "file:src/agent/tools.py",
+        "file:src/db.py",
+        "file:src/portfolio_ui.py"
+      ]
+    },
+    {
+      "id": "file:src/portfolio_ui.py",
+      "layerId": "ui",
+      "label": "portfolio_ui.py",
+      "file": "src/portfolio_ui.py",
+      "summary": "Gemeinsame UI-Bausteine im MARCO.OS-Portfolio-Stil (Kopfbereich, Beispiel-Einstieg, Technik-Bereich, Fusszeile) inklusive Farbtoken und Cluster-Akzenten. Bewusst in jede Demo kopiert statt als Paket geteilt, damit jedes Repo eigenstaendig lauffaehig bleibt.",
+      "deps": []
+    },
+    {
+      "id": "config:.streamlit/config.toml",
+      "layerId": "ui",
+      "label": "config.toml",
+      "file": ".streamlit/config.toml",
+      "summary": "Streamlit-Theme-Konfiguration im MARCO.OS-Look: dunkle Basis mit Amber-Akzent, damit das Dashboard nicht wie eine Standard-Streamlit-Demo aussieht.",
+      "deps": [
+        "file:src/app.py"
+      ]
+    }
+  ]
+}
