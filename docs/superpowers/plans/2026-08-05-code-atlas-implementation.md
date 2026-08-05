@@ -348,14 +348,17 @@ const OPTS = {
   source: { tool: "understand-anything", version: "1.0.0", license: "MIT" }
 };
 
-// n Knoten in einem Layer, absteigend viele eingehende Abhaengigkeiten:
-// modul-0 wird von allen anderen gebraucht, modul-1 von einem weniger, usw.
+// n Knoten in einem Layer mit absteigendem Fan-in: Knoten i haengt von allen
+// Knoten VOR ihm ab. Damit wird ${layer}-0 von n-1 anderen gebraucht, der
+// letzte von keinem — genau die Rangfolge, nach der reduceGraph auswaehlt.
+// (Richtung beachten: deps sind AUSgehende Kanten, der Fan-in entsteht als
+// deren Kehrwert. Andersherum aufgebaut kippt die Rangfolge komplett.)
 function fanIn(layer, n) {
   const nodes = Array.from({ length: n }, (_, i) => ({
     id: `${layer}-${i}`, label: `f${i}.py`, file: `src/${layer}/f${i}.py`,
     layer, summary: `summary ${i}`, deps: []
   }));
-  nodes.forEach((node, i) => { node.deps = nodes.slice(i + 1).map((t) => t.id); });
+  nodes.forEach((node, i) => { node.deps = nodes.slice(0, i).map((t) => t.id); });
   return nodes;
 }
 
