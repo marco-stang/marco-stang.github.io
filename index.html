@@ -137,14 +137,13 @@ button{font:inherit}
         </sc-for>
         <sc-for list="{{ atlasRings }}" as="ar" hint-placeholder-count="3">
           <ellipse cx="{{ ar.cx }}" cy="{{ ar.cy }}" rx="{{ ar.rx }}" ry="{{ ar.ry }}" fill="none"
-                   stroke="#b48cf5" stroke-width="1" stroke-dasharray="3 6" opacity=".34"
-                   style="transition:{{ atlasTransition }}"></ellipse>
+                   stroke="#b48cf5" stroke-width="1" stroke-dasharray="3 6" opacity=".34"></ellipse>
         </sc-for>
         <sc-for list="{{ atlasEdges }}" as="ae" hint-placeholder-count="4">
           <path d="{{ ae.d }}" fill="none" stroke="#b48cf5" stroke-width="1" opacity=".22"></path>
         </sc-for>
         <sc-for list="{{ atlasNodes }}" as="an" hint-placeholder-count="8">
-          <g style="transition:{{ atlasTransition }};cursor:{{ an.cursor }}"
+          <g style="cursor:{{ an.cursor }}"
              onMouseEnter="{{ an.onEnter }}" onMouseLeave="{{ an.onLeave }}">
             <circle cx="{{ an.x }}" cy="{{ an.y }}" r="{{ an.radius }}"
                     fill="{{ an.fill }}" stroke="#b48cf5" stroke-width="1"
@@ -743,17 +742,34 @@ class Component extends DCLogic {
     const D = this.state.D, act = this.state.active;
     const focused = !!act && act !== D?.TERM_ID;
     const shift = act && act !== D?.TERM_ID ? -Math.min(230, this.state.w * 0.16) : 0;
-    // Im Atlas-Modus zusaetzlich heranfahren. Zusammen mit stageOrigin() ergibt
-    // das die "Kamerafahrt": skaliert wird um den Planeten, nicht um die Mitte.
+    // Kamerafahrt, Fix-Runde 1 (Task-8-Review): transform-origin NICHT mehr
+    // auf den Planeten legen. Origin und Scale gleichzeitig zu animieren
+    // liess den Planeten selbst mitwandern (gemessen: 97.7px Schwenk waehrend
+    // der 0.42s), weil ein wandernder Ursprung jeden Bildpunkt um sich herum
+    // mitzieht -- auch den, der eigentlich stehen bleiben soll.
+    //
+    // Stattdessen bleibt der Skalierungsursprung fest in der Buehnenmitte c
+    // (CSS-Default "50% 50%", siehe sceneTransform) und der Planet wird per
+    // Ausgleichs-Translate E ortsfest gehalten. Herleitung: fuer einen Punkt p
+    // mit Ursprung c, Translate T und Skalierung S gilt
+    //   p_screen = c + T + S * (p - c)
+    // Stufe 1 (kein Atlas):     p1 = c + T + S1 * (p - c)
+    // Stufe >=2 (Atlas, Host h): p2 = c + T + E + S2 * (p - c),  S2 = S1 * atlasBoost
+    // Damit der Host h beim Uebergang stehen bleibt, muss p2(h) = p1(h) sein:
+    //   E = (S1 - S2) * (h - c) = (1 - atlasBoost) * S1 * (h - c)
+    // atlasBoost ist konstant 1.35, also E = -0.35 * S1 * (h - c). Ohne
+    // Atlas-Host ist E = (0, 0) -- der Nicht-Atlas-Fall skaliert unveraendert
+    // um die Mitte, translate(x, 0) ist aequivalent zum vorherigen translateX(x).
     const atlasBoost = this.atlasLevelEff() > 1 && this._atlasHost ? 1.35 : 1;
-    const scale = (focused ? this._zoom * 1.25 : this._zoom) * atlasBoost;
-    return `translateX(${shift}px) scale(${scale.toFixed(3)})`;
-  }
-  stageOrigin() {
-    const host = this._atlasHost;
-    return this.atlasLevelEff() > 1 && host
-      ? `${host.x.toFixed(0)}px ${host.y.toFixed(0)}px`
-      : "50% 50%";
+    const baseScale = focused ? this._zoom * 1.25 : this._zoom;
+    const scale = baseScale * atlasBoost;
+    let ex = 0, ey = 0;
+    if (atlasBoost !== 1) {
+      const cx = this.state.w / 2, cy = this.state.h / 2;
+      ex = (1 - atlasBoost) * baseScale * (this._atlasHost.x - cx);
+      ey = (1 - atlasBoost) * baseScale * (this._atlasHost.y - cy);
+    }
+    return `translate(${(shift + ex).toFixed(2)}px, ${ey.toFixed(2)}px) scale(${scale.toFixed(3)})`;
   }
   zoomIn = () => { this._zoom = Math.min(1.8, Math.round((this._zoom + 0.04) * 100) / 100); this.applyZoom(); };
   zoomOut = () => { this._zoom = Math.max(0.6, Math.round((this._zoom - 0.04) * 100) / 100); this.applyZoom(); };
@@ -766,7 +782,7 @@ class Component extends DCLogic {
   }
   setAtlasLevel = (level) => {
     const id = this.state.active;
-    if (level <= 1) { this.setState({ atlasLevel: 1, atlasError: false }); return; }
+    if (level <= 1) { this.setState({ atlasLevel: 1, atlasError: false, atlasHover: null }); return; }
     if (!id || !this._atlas) return;
     // Sofort schalten: der Regler darf nicht auf das Netz warten. Die Szene
     // rendert Stufe 2 leer, bis die Daten da sind — das ist ein Sekundenbruchteil
@@ -779,7 +795,7 @@ class Component extends DCLogic {
     });
   };
   open = (id) => {
-    this.setState({ active: id, tech: false, hist: false, atlasLevel: 1, atlas: null, atlasError: false });
+    this.setState({ active: id, tech: false, hist: false, atlasLevel: 1, atlas: null, atlasError: false, atlasHover: null });
     this.fetchActivity(id);
     this.syncHash(id);
     clearTimeout(this._stallTimer);
@@ -818,7 +834,7 @@ class Component extends DCLogic {
     this.armChatLoading();
     if (this._chatFrame) this._chatFrame.src = this._chatFrame.src;
   };
-  close = () => { this.setState({ active: null, atlasLevel: 1, atlas: null, atlasError: false }); this.syncHash(null); };
+  close = () => { this.setState({ active: null, atlasLevel: 1, atlas: null, atlasError: false, atlasHover: null }); this.syncHash(null); };
 
 
   startTour = () => { this.setState({ tour: -1 }); this.goTour(0); };
@@ -955,8 +971,9 @@ class Component extends DCLogic {
     // Die Layer-/Modulringe liegen um den AKTIVEN Planeten, nicht um die Sonne.
     // Die Hauptszene bleibt gerendert und dimmt lediglich staerker ab — der
     // Besucher soll sehen, wo im System er sich befindet.
-    // _atlasHost merkt sich den Planeten fuer stageTransform()/stageOrigin():
-    // die Kamera skaliert um genau diesen Punkt.
+    // _atlasHost merkt sich den Planeten fuer stageTransform(): der
+    // Ausgleichs-Translate dort haelt genau diesen Punkt beim Heranfahren
+    // ortsfest (siehe Herleitung an stageTransform()).
     let atlasRings = [], atlasNodes = [], atlasEdges = [];
     this._atlasHost = null;
     if (this.atlasLevelEff() > 1 && this.state.atlas && this._atlasLayout) {
@@ -1014,7 +1031,13 @@ class Component extends DCLogic {
       // Der Sammelknoten "+N weitere" ist bewusst nicht interaktiv: er steht
       // fuer weggekappte Module, zu denen es nichts anzuzeigen gibt.
       cursor: n.more ? "default" : "pointer",
-      onEnter: n.more ? () => {} : () => this.setState({ atlasHover: n.summary || n.label }),
+      // atlasHover ist ein Objekt (nicht nur der Text), weil der Hinweiskasten
+      // Position UND Layer-Zugehoerigkeit braucht — hoverNode existiert im
+      // Atlas-Modus nicht (das ist ein Planetenknoten), also muss der Modul-
+      // knoten seine eigenen Koordinaten mitliefern.
+      onEnter: n.more ? () => {} : () => this.setState({
+        atlasHover: { text: n.summary || n.label, x: n.x, y: n.y, layerId: n.layerId }
+      }),
       onLeave: n.more ? () => {} : () => this.setState({ atlasHover: null })
     }));
     const activeP = D.PROJECTS.find((p) => p.id === active) || (active === D.CHAT_ID ? D.PROJECTS.find((p) => p.moon) : null);
@@ -1088,6 +1111,11 @@ class Component extends DCLogic {
     });
     const hoverNode = nodes.find((n) => (n.p ? n.p.id : "center") === hover);
     const hoverP = hoverNode && hoverNode.p;
+    // Layer-Label fuer den Hinweiskasten im Atlas-Modus: atlasRings traegt
+    // layerId + label unveraendert aus atlas-layout.js durch.
+    const atlasHoverLayer = this.state.atlasHover
+      ? (atlasRings ?? []).find((r) => r.layerId === this.state.atlasHover.layerId)
+      : null;
     const demoUrl = isChat ? null : activeP ? activeP.demoUrl : null;
     const commit = activeP && this.state.gh[activeP.id] ? relDe(this.state.gh[activeP.id]) : null;
     const accent = isResume ? "#b48cf5" : activeP ? D.CLUSTERS[activeP.cluster].color : "#4fd6c4";
@@ -1098,23 +1126,30 @@ class Component extends DCLogic {
     return {
       ...base, nodes: nodeVals, edges, rings,
       atlasRings: atlasRings ?? [], atlasEdges: atlasEdges ?? [], atlasNodes: atlasNodeVals,
-      atlasTransition: reduceMotion ? "none" : "opacity .5s cubic-bezier(.22,1,.3,1)",
       leaders: this.state.leaders || [],
       sceneTransform: `position:absolute;inset:0;will-change:transform;transition:${
-        reduceMotion ? "none" : "transform .42s cubic-bezier(.22,1,.3,1), transform-origin .42s cubic-bezier(.22,1,.3,1)"
-      };transform-origin:${this.stageOrigin()};transform:${this.stageTransform()}`,
+        reduceMotion ? "none" : "transform .42s cubic-bezier(.22,1,.3,1)"
+      };transform:${this.stageTransform()}`,
       hudOpacity: booting ? 0 : active ? 0.22 : 1,
       hintOpacity: booting || active || hover ? 0 : 0.9,
       statProjects: `${D.PROJECTS.length} Projekte`,
       statDemos: `${D.PROJECTS.filter((p) => p.demoUrl).length} Live-Demos`,
       bootLines: D.BOOT.map((l, i) => ({ text: l.text || " ", color: l.c, opacity: i <= this.state.bootStep ? 1 : 0 })),
 
-      tip: !!hoverP && !active,
-      tipLeft: hoverNode ? Math.round(Math.max(140, Math.min(w - 140, hoverNode.x))) : 0,
-      tipTop: hoverNode ? Math.round(hoverNode.y + 58) : 0,
-      tipText: this.state.atlasHover || (hoverP ? hoverP.summary : ""),
-      tipCluster: hoverP ? D.CLUSTERS[hoverP.cluster].label : "",
-      tipAccent: hoverP ? D.CLUSTERS[hoverP.cluster].color : "#b48cf5",
+      // Im Atlas-Modus ist immer ein Projekt offen (active), das den Kasten
+      // sonst unterdrueckt (die Regel gilt fuer den Planeten-Hover: bei
+      // offenem Fenster sieht man dessen Inhalt bereits). Ein gesetzter
+      // atlasHover zeigt den Kasten deshalb unabhaengig von active.
+      tip: (!!hoverP && !active) || !!this.state.atlasHover,
+      tipLeft: this.state.atlasHover
+        ? Math.round(Math.max(140, Math.min(w - 140, this.state.atlasHover.x)))
+        : hoverNode ? Math.round(Math.max(140, Math.min(w - 140, hoverNode.x))) : 0,
+      tipTop: this.state.atlasHover
+        ? Math.round(this.state.atlasHover.y + 58)
+        : hoverNode ? Math.round(hoverNode.y + 58) : 0,
+      tipText: this.state.atlasHover ? this.state.atlasHover.text : (hoverP ? hoverP.summary : ""),
+      tipCluster: this.state.atlasHover ? (atlasHoverLayer ? atlasHoverLayer.label : "") : (hoverP ? D.CLUSTERS[hoverP.cluster].label : ""),
+      tipAccent: this.state.atlasHover ? "#b48cf5" : (hoverP ? D.CLUSTERS[hoverP.cluster].color : "#b48cf5"),
 
       openResume: () => { this.stopTour(); this.open(D.RESUME_ID); },
       openChat: () => { this.stopTour(); this.open(D.CHAT_ID); },
