@@ -613,7 +613,16 @@ class Component extends DCLogic {
   measure = () => {
     const el = this._scene; if (!el) return;
     const r = el.getBoundingClientRect();
-    if (Math.abs(r.width - this.state.w) > 2 || Math.abs(r.height - this.state.h) > 2) this.setState({ w: r.width, h: r.height });
+    // atlasHover mit zuruecksetzen (Fix-Runde 5, Critical): eine tatsaechliche
+    // Groessenaenderung aendert Panelbreite, Kamera-Rahmung und Ring-Radius
+    // (siehe freeArea()) -- ein gehoverter Modulknoten kann dabei verschwinden
+    // (z.B. faellt w unter NARROW_VIEWPORT, wo _atlasHost null wird) oder an
+    // eine andere Stelle wandern, ohne dass ein mouseleave feuert. Bewusst
+    // NUR im if-Zweig, nicht bei jedem Aufruf: measure() laeuft auch
+    // periodisch ohne tatsaechliche Groessenaenderung.
+    if (Math.abs(r.width - this.state.w) > 2 || Math.abs(r.height - this.state.h) > 2) {
+      this.setState({ w: r.width, h: r.height, atlasHover: null });
+    }
   };
   setStage = (el) => { this._stage = el; };
   // Führungslinien aus den ECHTEN Label-/Planeten-Rechtecken (getBoundingClientRect)
@@ -768,6 +777,18 @@ class Component extends DCLogic {
   applyZoom() {
     if (this._stage) this._stage.style.transform = this.stageTransform();
     this._sky && null;
+    // Fix-Runde 5 (Critical): applyZoom schreibt bewusst direkt aufs DOM statt
+    // ueber setState (Kommentar oben) -- der Hinweiskasten ist aber Kind der
+    // Buehne und skaliert dadurch WAEHREND des Zoomens automatisch mit,
+    // waehrend seine berechnete Gegenskalierung (atlasTipPos(), Runde 3/4)
+    // eingefroren bleibt, bis der naechste reguläre Render sie neu berechnet
+    // -- die Groessen-Garantie ist fuer die Dauer des Scrollens ausgehebelt.
+    // Ehrliche Aufloesung: der Kasten verschwindet waehrend des Zoomens,
+    // statt kurzzeitig falsch (zu gross/klein) dazustehen. Nur wenn
+    // tatsaechlich etwas gehovert ist -- sonst wuerde jede einzelne
+    // Mausrad-Raste einen State-Update ausloesen, genau das Ruckeln, das der
+    // direkte DOM-Weg oben vermeiden soll.
+    if (this.state.atlasHover) this.setState({ atlasHover: null });
   }
   // Einzige Quelle fuer die tatsaechlich darstellbare Atlas-Stufe. Der State
   // darf ueber dem Maximum stehen (Fenster wurde nach dem Ziehen verkleinert);
@@ -783,6 +804,18 @@ class Component extends DCLogic {
   panelWidth(isChat) {
     const [min, vw, max] = isChat ? [320, 66, 780] : [320, 46, 560];
     return { css: `clamp(${min}px,${vw}vw,${max}px)`, px: Math.min(max, Math.max(min, (vw / 100) * this.state.w)) };
+  }
+  // Freie Flaeche links vom Projektfenster (Fix-Runde 5, Important): dieselbe
+  // Groesse wurde bislang an drei Stellen einzeln ausgerechnet
+  // (stageTransform() fuer die Kamera-Rahmung, layout() fuer die Ring-
+  // Obergrenze, atlasTipPos() fuer die Kasten-Klemmung) -- bislang immer
+  // konsistent, aber index.html hat keine Testabdeckung, ein Auseinander-
+  // laufen der drei Kopien wuerde niemand bemerken, bis die Rahmung sichtbar
+  // kaputt ist. Aus demselben Grund, aus dem panelWidth() und stageScale()
+  // schon eigene Methoden sind: eine Quelle statt dreier Kopien.
+  freeArea() {
+    const freeWidth = this.state.w - this.panelWidth(false).px;
+    return { freeWidth, freeCenterX: freeWidth / 2, freeCenterY: this.state.h / 2 };
   }
   // Buehnenskalierung: Basis (Fokus-Boost + Mausrad-Zoom) und zusaetzlicher
   // Atlas-Faktor. layout() (Ring-Obergrenze) und stageTransform() (Kamera)
@@ -837,8 +870,7 @@ class Component extends DCLogic {
     let tx = shift, ty = 0;
     if (atlasBoost !== 1) {
       const cx = this.state.w / 2, cy = this.state.h / 2;
-      const freeWidth = this.state.w - this.panelWidth(false).px;
-      const freeCenterX = freeWidth / 2, freeCenterY = this.state.h / 2;
+      const { freeCenterX, freeCenterY } = this.freeArea();
       tx = freeCenterX - cx - scale * (this._atlasHost.x - cx);
       ty = freeCenterY - cy - scale * (this._atlasHost.y - cy);
     }
@@ -860,8 +892,7 @@ class Component extends DCLogic {
   atlasTipPos(hoverX, hoverY) {
     const host = this._atlasHost;
     const { scale } = this.stageScale();
-    const freeWidth = this.state.w - this.panelWidth(false).px;
-    const freeCenterX = freeWidth / 2, freeCenterY = this.state.h / 2;
+    const { freeWidth, freeCenterX, freeCenterY } = this.freeArea();
     const rawX = freeCenterX + scale * (hoverX - host.x);
     // +58 in Bildschirm-px (nicht Buehneneinheiten!), damit die Luecke
     // zwischen Modulpunkt und Kasten unabhaengig vom Zoom/Atlas-Boost gleich
@@ -899,12 +930,21 @@ class Component extends DCLogic {
   }
   setAtlasLevel = (level) => {
     const id = this.state.active;
+    // Fix-Runde 5 (Critical): JEDER Stufenwechsel setzt atlasHover zurueck,
+    // nicht nur der Zweig auf Stufe 1. Grund: die Modulknoten aus der
+    // vorigen Stufe verschwinden ohne mouseleave aus dem DOM (kein Event
+    // fuer entfernte Elemente), sobald eine andere Stufe gerendert wird --
+    // atlasHover haengt dann an einem Modul, das gar nicht mehr existiert,
+    // und blieb bislang bis zur naechsten Maus-Bewegung so stehen (sichtbar:
+    // der Kasten beschreibt ein nicht mehr gezeichnetes Modul; im schlimmsten
+    // Fall reisst ein spaeter folgender Resize unter NARROW_VIEWPORT dann die
+    // Seite weg, siehe atlasTipPos()).
     if (level <= 1) { this.setState({ atlasLevel: 1, atlasError: false, atlasHover: null }); return; }
     if (!id || !this._atlas) return;
     // Sofort schalten: der Regler darf nicht auf das Netz warten. Die Szene
     // rendert Stufe 2 leer, bis die Daten da sind — das ist ein Sekundenbruchteil
     // aus dem Cache und faellt bei Fehlschlag auf Stufe 1 zurueck.
-    this.setState({ atlasLevel: level, atlasError: false });
+    this.setState({ atlasLevel: level, atlasError: false, atlasHover: null });
     this._atlas.loadAtlas(id, new URL("./", document.baseURI).href).then((atlas) => {
       if (this.state.active !== id) return;   // inzwischen anderes Projekt offen
       if (!atlas) { this.setState({ atlasLevel: 1, atlas: null, atlasError: true }); return; }
@@ -1107,7 +1147,9 @@ class Component extends DCLogic {
         // Fix-Runde 3: der Schmalviewport-Sonderfall (kein maxRadius unterhalb
         // NARROW_VIEWPORT) ist raus — seit maxLevelFor() dort nur noch Stufe 1
         // erlaubt, wird dieser Zweig nie mehr mit einem Atlas-Host erreicht.
-        const freeWidth = w - this.panelWidth(false).px;
+        // Fix-Runde 5: freeArea() statt eigener Inline-Formel, dieselbe Quelle
+        // wie stageTransform() und atlasTipPos() (siehe dort).
+        const { freeWidth } = this.freeArea();
         const maxRadius = (freeWidth / 2 - 24) / this.stageScale().scale;
         const out = this._atlasLayout.computeAtlasLayout(this.state.atlas, {
           level: this.atlasLevelEff(), cx: host.x, cy: host.y, w, h, maxRadius
@@ -1248,7 +1290,18 @@ class Component extends DCLogic {
     // Bildschirmgerechte Position + Gegenskalierung, Fix-Runde 3 (siehe
     // atlasTipPos()). null ausserhalb des Atlas-Hovers -- dort bleibt tipLeft/
     // tipTop/tipScale exakt das bisherige, unveraenderte Verhalten.
-    const atlasTip = this.state.atlasHover ? this.atlasTipPos(this.state.atlasHover.x, this.state.atlasHover.y) : null;
+    // Fix-Runde 5 (Critical): zusaetzlich this._atlasHost pruefen, nicht nur
+    // atlasHover. atlasHover haengt an einem DOM-Element (dem Modulpunkt),
+    // das ohne mouseleave verschwinden kann (Stufenwechsel, Resize,
+    // Mausrad-Zoom entfernen/verschieben die Modulknoten, siehe die drei
+    // Reset-Stellen unten) -- atlasHover kann dadurch kurzzeitig verwaisen,
+    // bevor der Reset greift. atlasTipPos() liest this._atlasHost.x ohne
+    // eigene Pruefung; ohne diesen Wächter reisst ein null-Host die gesamte
+    // Seite weg (Root.renderVals(): Cannot read properties of null). Guertel
+    // UND Hosentraeger: die drei Reset-Pfade sollten das verhindern, aber der
+    // Schadensfall (Totalausfall) rechtfertigt die zusaetzliche Pruefung hier.
+    const atlasTip = (this.state.atlasHover && this._atlasHost)
+      ? this.atlasTipPos(this.state.atlasHover.x, this.state.atlasHover.y) : null;
     const demoUrl = isChat ? null : activeP ? activeP.demoUrl : null;
     const commit = activeP && this.state.gh[activeP.id] ? relDe(this.state.gh[activeP.id]) : null;
     const accent = isResume ? "#b48cf5" : activeP ? D.CLUSTERS[activeP.cluster].color : "#4fd6c4";
