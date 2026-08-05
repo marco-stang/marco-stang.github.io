@@ -896,9 +896,17 @@ export function computeAtlasLayout(atlas, opts) {
   const roomY = Math.max(innerRx * ASPECT, Math.min(cy, h - cy) - 12);
   const maxRx = Math.max(innerRx, Math.min(roomX, roomY / ASPECT));
 
+  // Schrittweite aus der verfuegbaren Spanne ableiten statt fix zu setzen und
+  // dann zu klemmen: bei MAX_LAYERS=6 auf 375px Breite fielen sonst die Ringe
+  // 4-6 auf denselben Radius. Unter 760px ist Stufe 3 abgeschaltet, die Ringe
+  // SIND dort die ganze Ansicht — drei ununterscheidbare Layer waeren der
+  // komplette Informationsverlust. gapCount floort auf 1, damit ein
+  // Ein-Layer-Atlas nicht durch null teilt.
+  const gapCount = Math.max(layers.length - 1, 1);
+  const effectiveStep = Math.min(step, (maxRx - innerRx) / gapCount);
+
   const rings = layers.map((layer, i) => {
-    const wanted = innerRx + i * step;
-    const rx = clamp(wanted, innerRx, maxRx);
+    const rx = clamp(innerRx + i * effectiveStep, innerRx, maxRx);
     return { cx, cy, rx, ry: rx * ASPECT, label: layer.label, layerId: layer.id, count: layer.count };
   });
 
