@@ -183,15 +183,29 @@ button{font:inherit}
       </sc-for>
 
       <sc-if value="{{ tip }}" hint-placeholder-val="{{ false }}">
-        <!-- transform-origin:50% 0% passt zum translate(-50%,0) darunter (Mitte
-             oben = Ankerpunkt): scale({{ tipScale }}) schrumpft/waechst damit
-             um genau den Punkt, der ohnehin schon an tipLeft/tipTop verankert
-             ist -- ausserhalb des Atlas-Hovers ist tipScale 1 (Neutralelement,
-             siehe renderVals), das bestehende Planeten-Hover-Verhalten bleibt
-             also unveraendert (Fix-Runde 3). -->
-        <div style="position:absolute;left:{{ tipLeft }}px;top:{{ tipTop }}px;transform-origin:50% 0%;transform:translate(-50%,0) scale({{ tipScale }});width:250px;padding:12px 14px;border-radius:12px;background:rgba(12,9,26,.94);border:1px solid rgba(160,140,230,.28);box-shadow:0 22px 60px rgba(0,0,0,.7);backdrop-filter:blur(10px);pointer-events:none;z-index:30;animation:rise .22s ease both">
-          <div style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:{{ tipAccent }};margin-bottom:7px">{{ tipCluster }}</div>
-          <div style="font:400 12.5px/1.5 'Space Grotesk',sans-serif;color:#c9c5e8;text-wrap:pretty">{{ tipText }}</div>
+        <!-- Fix-Runde 4: Positionierung/Transform und die "rise"-Animation
+             MUESSEN auf zwei verschiedene Elemente verteilt sein. Ein Element
+             kann nicht gleichzeitig eine transform-Animation laufen lassen
+             UND eine eigene transform-Deklaration behalten -- CSS-Animationen
+             liegen in der Kaskade ueber Inline-Styles, und das "to"-Keyframe
+             von @keyframes rise (Zeile ~54) setzt transform:none mit
+             animation-fill-mode:both, das bleibt also dauerhaft stehen und
+             ueberschreibt jede eigene transform komplett. Gemessen (Reviewer):
+             computedTransform war matrix(1,0,0,1,0,0) -- die Identitaet --
+             obwohl transform:translate(-50%,0) scale(...) im style-Attribut
+             stand. Das betraf nicht nur die Runde-3-Gegenskalierung, sondern
+             seit jeher auch das urspruengliche translate(-50%,0): der Kasten
+             hing schon vor Task 8 an seiner linken statt an der zentrierten
+             Kante. Deshalb jetzt zwei Elemente: AUSSEN nur Position + Transform
+             (keine Animation), INNEN Optik + "rise"-Animation (darf ihre
+             eigene transform an die Animation verlieren, das ist dort so
+             gewollt). Wer das aus Aufraeumgruenden wieder zusammenlegt,
+             reproduziert exakt diesen Bug. -->
+        <div style="position:absolute;left:{{ tipLeft }}px;top:{{ tipTop }}px;transform-origin:50% 0%;transform:translate(-50%,0) scale({{ tipScale }});pointer-events:none;z-index:30">
+          <div style="width:250px;padding:12px 14px;border-radius:12px;background:rgba(12,9,26,.94);border:1px solid rgba(160,140,230,.28);box-shadow:0 22px 60px rgba(0,0,0,.7);backdrop-filter:blur(10px);animation:rise .22s ease both">
+            <div style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:{{ tipAccent }};margin-bottom:7px">{{ tipCluster }}</div>
+            <div style="font:400 12.5px/1.5 'Space Grotesk',sans-serif;color:#c9c5e8;text-wrap:pretty">{{ tipText }}</div>
+          </div>
         </div>
       </sc-if>
     </div>
@@ -854,11 +868,20 @@ class Component extends DCLogic {
     // gross bleibt -- derselbe Abstand wie beim Planeten-Hover (tipTop unten),
     // nur bewusst VOR statt nach der Skalierung angewendet.
     const rawY = freeCenterY + scale * (hoverY - host.y) + 58;
-    // Boxmasse in natuerlichen Bildschirm-px: 250px Breite (width:250px im
-    // Template) + 16px Rand, geschaetzte Boxhoehe (Kicker + Fliesstext) + Rand.
-    const HALF_W = 125 + 16, HALF_H = 45 + 16;
-    const clampedX = Math.max(HALF_W, Math.min(freeWidth - HALF_W, rawX));
-    const clampedY = Math.max(HALF_H, Math.min(this.state.h - HALF_H, rawY));
+    // Boxmasse in natuerlichen Bildschirm-px, gemessen (nicht geschaetzt):
+    // 250x193px bei der laengsten Modulbeschreibung im Datensatz (Kicker
+    // 10px + Fliesstext 12.5px). Eine fruehere Schaetzung von HALF_H=61 war
+    // deutlich zu klein -- der Kasten waere unten aus dem Bild gelaufen.
+    const BOX_W = 250, BOX_H = 193, MARGIN = 16;
+    // Horizontal symmetrisch: translate(-50%,0) zentriert die Box auf den
+    // Ankerpunkt, also darf sie in beide Richtungen gleich weit ausladen.
+    const halfW = BOX_W / 2 + MARGIN;
+    const clampedX = Math.max(halfW, Math.min(freeWidth - halfW, rawX));
+    // Vertikal NICHT symmetrisch: transform-origin ist "50% 0%" (oben), die
+    // Box klappt vom Ankerpunkt aus nach UNTEN auf. Sie darf also fast bis an
+    // den oberen Rand heranreichen (nur MARGIN), muss aber ihre volle Hoehe
+    // BOX_H nach unten frei haben.
+    const clampedY = Math.max(MARGIN, Math.min(this.state.h - BOX_H - MARGIN, rawY));
     return {
       left: host.x + (clampedX - freeCenterX) / scale,
       top: host.y + (clampedY - freeCenterY) / scale,
