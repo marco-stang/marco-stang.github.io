@@ -21,10 +21,11 @@ function byRelevance(fanIn) {
 }
 
 export function reduceGraph(nodes, options) {
-  const { id, repo, generatedAt, source, overrides = null } = options;
+  const { id, repo, generatedAt, source, overrides = null, layerMeta = [] } = options;
   const pin = new Set(overrides?.pin ?? []);
   const hide = new Set(overrides?.hide ?? []);
   const labels = overrides?.labels ?? {};
+  const metaById = new Map(layerMeta.map((l) => [l.id, l]));
 
   const visible = (nodes ?? []).filter((n) => !hide.has(n.id));
 
@@ -54,10 +55,12 @@ export function reduceGraph(nodes, options) {
     const rest = sorted.filter((n) => !pin.has(n.id));
     const chosen = [...pinned, ...rest].slice(0, MAX_MODULES_PER_LAYER);
 
+    const meta = metaById.get(key);
     layers.push({
       id: key,
-      label: labels[key] ?? key,
-      summary: chosen[0]?.summary ?? "",
+      // Reihenfolge: Override schlaegt echten Namen schlaegt Schluessel.
+      label: labels[key] ?? meta?.label ?? key,
+      summary: meta?.summary ?? chosen[0]?.summary ?? "",
       count: all.length
     });
 

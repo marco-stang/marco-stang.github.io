@@ -138,3 +138,22 @@ test("ist deterministisch auch bei identischen Fan-in/deps-Ties auf gemeinsamer 
     "Atlas muss identisch sein unabhaengig von Input-Reihenfolge bei Ties"
   );
 });
+
+test("nutzt Layer-Metadaten fuer Titel und Beschreibung", () => {
+  const atlas = reduceGraph(fanIn("agent", 2), {
+    ...OPTS,
+    layerMeta: [{ id: "agent", label: "Agenten-Kern", summary: "LangGraph-Orchestrierung." }]
+  });
+  const layer = atlas.layers.find((l) => l.id === "agent");
+  assert.equal(layer.label, "Agenten-Kern");
+  assert.equal(layer.summary, "LangGraph-Orchestrierung.");
+});
+
+test("labels-Override schlaegt die Layer-Metadaten", () => {
+  const atlas = reduceGraph(fanIn("agent", 2), {
+    ...OPTS,
+    layerMeta: [{ id: "agent", label: "Agenten-Kern", summary: "s" }],
+    overrides: { labels: { agent: "Eigener Titel" } }
+  });
+  assert.equal(atlas.layers.find((l) => l.id === "agent").label, "Eigener Titel");
+});
