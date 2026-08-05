@@ -1022,6 +1022,13 @@ class Component extends DCLogic {
     const demoUrl = isChat ? null : activeP ? activeP.demoUrl : null;
     const commit = activeP && this.state.gh[activeP.id] ? relDe(this.state.gh[activeP.id]) : null;
     const accent = isResume ? "#b48cf5" : activeP ? D.CLUSTERS[activeP.cluster].color : "#4fd6c4";
+    // Einzige Quelle fuer die tatsaechlich darstellbare Atlas-Stufe: der
+    // Regler-State darf ueber dem aktuellen Maximum liegen (Fenster wurde
+    // nach dem Ziehen verkleinert). Label UND Range-Input lesen beide diese
+    // geklemmte Stufe, sonst zeigt das Label z.B. weiter "Code", waehrend
+    // der Regler visuell auf "Struktur" haengt.
+    const atlasMaxLevel = this._atlasLayout ? this._atlasLayout.maxLevelFor(this.state.w) : 1;
+    const atlasLevelClamped = Math.min(this.state.atlasLevel, atlasMaxLevel);
 
     return {
       ...base, nodes: nodeVals, edges, rings,
@@ -1071,9 +1078,9 @@ class Component extends DCLogic {
       atlasAvailable: Boolean(
         this.state.atlasIndex && activeP && this._atlas?.hasAtlas(this.state.atlasIndex, activeP.id)
       ),
-      atlasLevel: this.state.atlasLevel,
-      atlasMaxLevel: this._atlasLayout ? this._atlasLayout.maxLevelFor(this.state.w) : 1,
-      atlasLevelLabel: ["", "Projekt", "Struktur", "Code"][this.state.atlasLevel] || "Projekt",
+      atlasLevel: atlasLevelClamped,
+      atlasMaxLevel: atlasMaxLevel,
+      atlasLevelLabel: ["", "Projekt", "Struktur", "Code"][atlasLevelClamped] || "Projekt",
       atlasHint: this.state.atlasError
         ? "Architekturdaten gerade nicht verfügbar"
         : "Graph-Extraktion: Understand-Anything (MIT) · Reduktion und Darstellung: eigene Pipeline",
