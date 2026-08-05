@@ -7,12 +7,19 @@
 
 export const NARROW_VIEWPORT = 760;
 
-// Verhaeltnis Hoehe/Breite der Ringe — flacher als ein Kreis, passend zum
-// breiten Viewport und konsistent mit den Cluster-Ringen der Hauptszene.
+// Verhaeltnis Hoehe/Breite der Ringe — flacher als ein Kreis, damit sie
+// zum breiten Viewport passen und Module uebersichtlich sind.
 const ASPECT = 0.72;
-const INNER_RX = 74;          // Abstand des ersten Rings zum Planetenkoerper
-const RING_STEP = 46;         // Abstand zwischen zwei Layer-Ringen
+// Innerster Ring-Radius im breiten Viewport: grosser genug, um das zentrale
+// Label (52px Dot + Glow + "Marco Stang") nicht zu ueberlagern.
+const INNER_RX = 74;
+// Standardabstand zwischen aufeinanderfolgenden Ringen im breiten Viewport:
+// reicht fuer Label-Spacing, aber kompakt genug fuer 6 Layers ohne Stauchung.
+const RING_STEP = 46;
+// Innerster Ring-Radius auf Handys unter 760px: Platz ist dort stark
+// begrenzt, also enger am Zentrum.
 const NARROW_INNER_RX = 52;
+// Kleinerer Abstieg zwischen Ringen auf schmalen Viewports — noch kompakter.
 const NARROW_RING_STEP = 32;
 // Startwinkel je Ring versetzt, damit Module benachbarter Ringe nicht auf
 // derselben Speiche uebereinander liegen.
@@ -43,8 +50,16 @@ export function computeAtlasLayout(atlas, opts) {
   const roomY = Math.max(innerRx * ASPECT, Math.min(cy, h - cy) - 12);
   const maxRx = Math.max(innerRx, Math.min(roomX, roomY / ASPECT));
 
+  // Dynamischer Abstieg zwischen Ringen: wenn der feste Abstieg nicht in den
+  // verfuegbaren Platz passt (zB bei 6 Layers auf schmalem Viewport), wird er
+  // komprimiert, so dass alle Rings unterscheidbar bleiben. Zugleich
+  // garantieren wir, dass alle Radien streng positiv bleiben.
+  const availableSpan = maxRx - innerRx;
+  const gapCount = Math.max(layers.length - 1, 1);
+  const effectiveStep = Math.min(step, availableSpan / gapCount);
+
   const rings = layers.map((layer, i) => {
-    const wanted = innerRx + i * step;
+    const wanted = innerRx + i * effectiveStep;
     const rx = clamp(wanted, innerRx, maxRx);
     return { cx, cy, rx, ry: rx * ASPECT, label: layer.label, layerId: layer.id, count: layer.count };
   });

@@ -106,3 +106,32 @@ test("leerer Atlas liefert leere Listen statt zu werfen", () => {
   assert.deepEqual(out.nodes, []);
   assert.deepEqual(out.edges, []);
 });
+
+test("sechs Layer bleiben bei schmalem Viewport visuell unterscheidbar", () => {
+  const sixLayers = {
+    id: "test", repo: "test", generatedAt: "2026-08-05",
+    source: { tool: "test", license: "MIT" },
+    layers: [
+      { id: "l1", label: "Layer 1", summary: "", count: 1 },
+      { id: "l2", label: "Layer 2", summary: "", count: 1 },
+      { id: "l3", label: "Layer 3", summary: "", count: 1 },
+      { id: "l4", label: "Layer 4", summary: "", count: 1 },
+      { id: "l5", label: "Layer 5", summary: "", count: 1 },
+      { id: "l6", label: "Layer 6", summary: "", count: 1 }
+    ],
+    modules: []
+  };
+  const { rings } = computeAtlasLayout(sixLayers, { level: 2, cx: 160, cy: 300, w: 375, h: 700 });
+  assert.equal(rings.length, 6);
+  // Alle sechs Radien muessen paarweise verschieden sein und positiv bleiben
+  const rxValues = rings.map((r) => r.rx);
+  for (let i = 0; i < rxValues.length; i++) {
+    assert.ok(rxValues[i] > 0, `ring ${i}: rx=${rxValues[i]} muss positiv sein`);
+  }
+  const uniqueRx = new Set(rxValues);
+  assert.equal(
+    uniqueRx.size,
+    6,
+    `alle sechs rx sollten unterschiedlich sein, aber ${JSON.stringify(rxValues)} hat ${uniqueRx.size} unterschiedliche Werte`
+  );
+});
