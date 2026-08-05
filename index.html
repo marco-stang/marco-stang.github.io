@@ -135,6 +135,24 @@ button{font:inherit}
         <sc-for list="{{ leaders }}" as="ld" hint-placeholder-count="4">
           <line x1="{{ ld.x1 }}" y1="{{ ld.y1 }}" x2="{{ ld.x2 }}" y2="{{ ld.y2 }}" stroke="{{ ld.color }}" stroke-width="1" stroke-linecap="round" opacity="0.75"></line>
         </sc-for>
+        <sc-for list="{{ atlasRings }}" as="ar" hint-placeholder-count="3">
+          <ellipse cx="{{ ar.cx }}" cy="{{ ar.cy }}" rx="{{ ar.rx }}" ry="{{ ar.ry }}" fill="none"
+                   stroke="#b48cf5" stroke-width="1" stroke-dasharray="3 6" opacity=".34"
+                   style="transition:{{ atlasTransition }}"></ellipse>
+        </sc-for>
+        <sc-for list="{{ atlasEdges }}" as="ae" hint-placeholder-count="4">
+          <path d="{{ ae.d }}" fill="none" stroke="#b48cf5" stroke-width="1" opacity=".22"></path>
+        </sc-for>
+        <sc-for list="{{ atlasNodes }}" as="an" hint-placeholder-count="8">
+          <g style="transition:{{ atlasTransition }};cursor:{{ an.cursor }}"
+             onMouseEnter="{{ an.onEnter }}" onMouseLeave="{{ an.onLeave }}">
+            <circle cx="{{ an.x }}" cy="{{ an.y }}" r="{{ an.radius }}"
+                    fill="{{ an.fill }}" stroke="#b48cf5" stroke-width="1"
+                    stroke-dasharray="{{ an.dash }}"></circle>
+            <text x="{{ an.x }}" y="{{ an.labelY }}" text-anchor="middle"
+                  style="font:500 9px/1 'JetBrains Mono',monospace;fill:#8a86a8">{{ an.label }}</text>
+          </g>
+        </sc-for>
       </svg>
 
       <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="9">
@@ -715,11 +733,27 @@ class Component extends DCLogic {
     if (this._stage) this._stage.style.transform = this.stageTransform();
     this._sky && null;
   }
+  // Einzige Quelle fuer die tatsaechlich darstellbare Atlas-Stufe. Der State
+  // darf ueber dem Maximum stehen (Fenster wurde nach dem Ziehen verkleinert);
+  // gerendert wird immer die geklemmte Stufe. Absichtlich ohne setState: wird
+  // das Fenster wieder breit, kommt die gewaehlte Tiefe zurueck.
+  atlasMaxLevel() { return this._atlasLayout ? this._atlasLayout.maxLevelFor(this.state.w) : 1; }
+  atlasLevelEff() { return Math.min(this.state.atlasLevel, this.atlasMaxLevel()); }
   stageTransform() {
     const D = this.state.D, act = this.state.active;
     const focused = !!act && act !== D?.TERM_ID;
     const shift = act && act !== D?.TERM_ID ? -Math.min(230, this.state.w * 0.16) : 0;
-    return `translateX(${shift}px) scale(${(focused ? this._zoom * 1.25 : this._zoom).toFixed(3)})`;
+    // Im Atlas-Modus zusaetzlich heranfahren. Zusammen mit stageOrigin() ergibt
+    // das die "Kamerafahrt": skaliert wird um den Planeten, nicht um die Mitte.
+    const atlasBoost = this.atlasLevelEff() > 1 && this._atlasHost ? 1.35 : 1;
+    const scale = (focused ? this._zoom * 1.25 : this._zoom) * atlasBoost;
+    return `translateX(${shift}px) scale(${scale.toFixed(3)})`;
+  }
+  stageOrigin() {
+    const host = this._atlasHost;
+    return this.atlasLevelEff() > 1 && host
+      ? `${host.x.toFixed(0)}px ${host.y.toFixed(0)}px`
+      : "50% 50%";
   }
   zoomIn = () => { this._zoom = Math.min(1.8, Math.round((this._zoom + 0.04) * 100) / 100); this.applyZoom(); };
   zoomOut = () => { this._zoom = Math.max(0.6, Math.round((this._zoom - 0.04) * 100) / 100); this.applyZoom(); };
@@ -878,7 +912,8 @@ class Component extends DCLogic {
       D.ORDER.forEach((c) => {
         const list = byCluster[c]; if (!list.length) return;
         const rx = maxRx * mult[c], ry = rx * asp;
-        rings.push({ cx: ox, cy: oy, rx, ry, color: D.CLUSTERS[c].color, opacity: this.state.active ? 0.09 : 0.22 });
+        rings.push({ cx: ox, cy: oy, rx, ry, color: D.CLUSTERS[c].color,
+          opacity: this.atlasLevelEff() > 1 ? 0.04 : this.state.active ? 0.09 : 0.22 });
         list.forEach((p, i) => {
           const a = (2 * Math.PI * i) / list.length + (off[c] * Math.PI) / 180;
           nodes.push({ p, x: ox + Math.cos(a) * rx, y: oy + Math.sin(a) * ry });
@@ -911,9 +946,30 @@ class Component extends DCLogic {
         d = `M${center.x} ${center.y} Q${qx} ${qy} ${n.x} ${n.y}`;
       }
       const dim = focusId && focusId !== (n.p ? n.p.id : "center");
-      edges.push({ d, color: hexA(color, dim ? 0.07 : 0.2), flowColor: color, flowOpacity: dim ? 0 : 0.85, delay: `${(i * 0.62).toFixed(2)}s` });
+      const atlasDim = this.atlasLevelEff() > 1;
+      edges.push({ d, color: hexA(color, atlasDim ? 0.03 : dim ? 0.07 : 0.2), flowColor: color,
+        flowOpacity: atlasDim || dim ? 0 : 0.85, delay: `${(i * 0.62).toFixed(2)}s` });
     });
-    return { nodes, edges, rings, focusId };
+
+    // --- Code Atlas -------------------------------------------------------
+    // Die Layer-/Modulringe liegen um den AKTIVEN Planeten, nicht um die Sonne.
+    // Die Hauptszene bleibt gerendert und dimmt lediglich staerker ab — der
+    // Besucher soll sehen, wo im System er sich befindet.
+    // _atlasHost merkt sich den Planeten fuer stageTransform()/stageOrigin():
+    // die Kamera skaliert um genau diesen Punkt.
+    let atlasRings = [], atlasNodes = [], atlasEdges = [];
+    this._atlasHost = null;
+    if (this.atlasLevelEff() > 1 && this.state.atlas && this._atlasLayout) {
+      const host = nodes.find((n) => n.p && n.p.id === this.state.active);
+      if (host) {
+        this._atlasHost = host;
+        const out = this._atlasLayout.computeAtlasLayout(this.state.atlas, {
+          level: this.atlasLevelEff(), cx: host.x, cy: host.y, w, h
+        });
+        atlasRings = out.rings; atlasNodes = out.nodes; atlasEdges = out.edges;
+      }
+    }
+    return { nodes, edges, rings, focusId, atlasRings, atlasNodes, atlasEdges };
   }
 
   renderVals() {
@@ -947,7 +1003,20 @@ class Component extends DCLogic {
     ];
     base.guideTip = TIPS[this.state.tipIndex];
 
-    const { nodes, edges, rings, focusId } = this.layout(D);
+    const { nodes, edges, rings, focusId, atlasRings, atlasNodes, atlasEdges } = this.layout(D);
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    const atlasNodeVals = (atlasNodes ?? []).map((n) => ({
+      x: n.x, y: n.y, label: n.label,
+      radius: n.more ? 5 : 4.5,
+      fill: n.more ? "transparent" : "#b48cf5",
+      dash: n.more ? "2 3" : "none",
+      labelY: n.y + 15,
+      // Der Sammelknoten "+N weitere" ist bewusst nicht interaktiv: er steht
+      // fuer weggekappte Module, zu denen es nichts anzuzeigen gibt.
+      cursor: n.more ? "default" : "pointer",
+      onEnter: n.more ? () => {} : () => this.setState({ atlasHover: n.summary || n.label }),
+      onLeave: n.more ? () => {} : () => this.setState({ atlasHover: null })
+    }));
     const activeP = D.PROJECTS.find((p) => p.id === active) || (active === D.CHAT_ID ? D.PROJECTS.find((p) => p.moon) : null);
     const isResume = active === D.RESUME_ID, isChat = active === D.CHAT_ID, isTerminal = active === D.TERM_ID;
     const isProject = !!activeP && !isChat;
@@ -1022,18 +1091,18 @@ class Component extends DCLogic {
     const demoUrl = isChat ? null : activeP ? activeP.demoUrl : null;
     const commit = activeP && this.state.gh[activeP.id] ? relDe(this.state.gh[activeP.id]) : null;
     const accent = isResume ? "#b48cf5" : activeP ? D.CLUSTERS[activeP.cluster].color : "#4fd6c4";
-    // Einzige Quelle fuer die tatsaechlich darstellbare Atlas-Stufe: der
-    // Regler-State darf ueber dem aktuellen Maximum liegen (Fenster wurde
-    // nach dem Ziehen verkleinert). Label UND Range-Input lesen beide diese
-    // geklemmte Stufe, sonst zeigt das Label z.B. weiter "Code", waehrend
-    // der Regler visuell auf "Struktur" haengt.
-    const atlasMaxLevel = this._atlasLayout ? this._atlasLayout.maxLevelFor(this.state.w) : 1;
-    const atlasLevelClamped = Math.min(this.state.atlasLevel, atlasMaxLevel);
+    // Label UND Range-Input lesen beide dieselbe geklemmte Stufe ueber
+    // this.atlasLevelEff() (siehe dort), sonst zeigt das Label z.B. weiter
+    // "Code", waehrend der Regler visuell auf "Struktur" haengt.
 
     return {
       ...base, nodes: nodeVals, edges, rings,
+      atlasRings: atlasRings ?? [], atlasEdges: atlasEdges ?? [], atlasNodes: atlasNodeVals,
+      atlasTransition: reduceMotion ? "none" : "opacity .5s cubic-bezier(.22,1,.3,1)",
       leaders: this.state.leaders || [],
-      sceneTransform: `position:absolute;inset:0;will-change:transform;transition:transform .16s ease-out;transform:${this.stageTransform()}`,
+      sceneTransform: `position:absolute;inset:0;will-change:transform;transition:${
+        reduceMotion ? "none" : "transform .42s cubic-bezier(.22,1,.3,1), transform-origin .42s cubic-bezier(.22,1,.3,1)"
+      };transform-origin:${this.stageOrigin()};transform:${this.stageTransform()}`,
       hudOpacity: booting ? 0 : active ? 0.22 : 1,
       hintOpacity: booting || active || hover ? 0 : 0.9,
       statProjects: `${D.PROJECTS.length} Projekte`,
@@ -1043,7 +1112,7 @@ class Component extends DCLogic {
       tip: !!hoverP && !active,
       tipLeft: hoverNode ? Math.round(Math.max(140, Math.min(w - 140, hoverNode.x))) : 0,
       tipTop: hoverNode ? Math.round(hoverNode.y + 58) : 0,
-      tipText: hoverP ? hoverP.summary : "",
+      tipText: this.state.atlasHover || (hoverP ? hoverP.summary : ""),
       tipCluster: hoverP ? D.CLUSTERS[hoverP.cluster].label : "",
       tipAccent: hoverP ? D.CLUSTERS[hoverP.cluster].color : "#b48cf5",
 
@@ -1078,9 +1147,9 @@ class Component extends DCLogic {
       atlasAvailable: Boolean(
         this.state.atlasIndex && activeP && this._atlas?.hasAtlas(this.state.atlasIndex, activeP.id)
       ),
-      atlasLevel: atlasLevelClamped,
-      atlasMaxLevel: atlasMaxLevel,
-      atlasLevelLabel: ["", "Projekt", "Struktur", "Code"][atlasLevelClamped] || "Projekt",
+      atlasLevel: this.atlasLevelEff(),
+      atlasMaxLevel: this.atlasMaxLevel(),
+      atlasLevelLabel: ["", "Projekt", "Struktur", "Code"][this.atlasLevelEff()] || "Projekt",
       atlasHint: this.state.atlasError
         ? "Architekturdaten gerade nicht verfügbar"
         : "Graph-Extraktion: Understand-Anything (MIT) · Reduktion und Darstellung: eigene Pipeline",
