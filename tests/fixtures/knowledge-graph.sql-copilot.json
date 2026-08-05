@@ -1,0 +1,424 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "sql-agent",
+    "languages": [
+      "json",
+      "markdown",
+      "python",
+      "toml",
+      "txt",
+      "yaml"
+    ],
+    "frameworks": [
+      "LangGraph",
+      "LangChain",
+      "SQLAlchemy",
+      "Streamlit",
+      "pandas",
+      "pytest",
+      "Docker Compose"
+    ],
+    "description": "LangGraph-Agent, der natürlichsprachige Fragen gegen eine Postgres-Datenbank (Olist-E-Commerce-Datensatz, 9 Tabellen) beantwortet. Sicherheit steht im Mittelpunkt: SELECT-only-Whitelist, Einzel-Statement-Prüfung, erzwungenes LIMIT, EXPLAIN-Vorabprüfung und ein read-only DB-User, ergänzt um einen Selbstkorrektur-Loop (max. 3 Versuche) sowie ein Streamlit-Dashboard.",
+    "analyzedAt": "2026-08-05T14:38:04.117Z",
+    "gitCommitHash": "676d6f19674620a1a3b1cc475ef2a03fd3593efc"
+  },
+  "nodes": [
+    {
+      "id": "file:src/agent/graph.py",
+      "type": "file",
+      "name": "graph.py",
+      "filePath": "src/agent/graph.py",
+      "summary": "Herzstück des Projekts: verdrahtet die LangGraph-Nodes get_schema → generate_sql → validate_sql → execute_sql → answer inklusive Selbstkorrektur-Loop (max. 3 Versuche) bei Guardrail- oder Ausführungsfehlern. Definiert den AgentState und bietet eine CLI-Einstiegsmöglichkeit über run().",
+      "tags": [
+        "agent",
+        "orchestration",
+        "state-machine",
+        "entry-point",
+        "langgraph"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "build_graph() bekommt engine und llm als Parameter injiziert (statt sie selbst zu holen), damit Tests eine andere Engine oder ein Fake-LLM einsetzen können. Der State ist ein TypedDict, die Nodes sind Closures innerhalb von build_graph()."
+    },
+    {
+      "id": "file:src/agent/llm.py",
+      "type": "file",
+      "name": "llm.py",
+      "filePath": "src/agent/llm.py",
+      "summary": "Providerunabhängiges LLM-Setup: liest LLM_PROVIDER und LLM_MODEL aus der Umgebung und erzeugt darüber via LangChains init_chat_model das Chat-Modell. Dadurch bleibt der Agent an keinen einzelnen Anbieter gebunden.",
+      "tags": [
+        "llm",
+        "configuration",
+        "factory",
+        "utility",
+        "provider-abstraction"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:src/agent/prompts.py",
+      "type": "file",
+      "name": "prompts.py",
+      "filePath": "src/agent/prompts.py",
+      "summary": "Sammelt alle Prompt-Templates und die Builder-Funktionen, die daraus konkrete LangChain-Message-Listen bauen — für die SQL-Generierung (inkl. Retry-Variante mit vorheriger Query und Fehlermeldung) und für die Beantwortung in natürlicher Sprache.",
+      "tags": [
+        "prompts",
+        "templates",
+        "llm",
+        "utility",
+        "message-builder"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Prompts liegen als Modul-Konstanten mit .format()-Platzhaltern vor und werden erst in den Builder-Funktionen zu SystemMessage/HumanMessage-Objekten zusammengesetzt — so bleibt der Prompt-Text zentral an einer Stelle editierbar."
+    },
+    {
+      "id": "function:src/agent/graph.py:_strip_sql",
+      "type": "function",
+      "name": "_strip_sql",
+      "filePath": "src/agent/graph.py",
+      "lineRange": [
+        49,
+        58
+      ],
+      "summary": "Entfernt Markdown-Codeblock-Zäune aus der LLM-Antwort, falls das Modell die Query trotz Anweisung in ```sql ... ``` verpackt.",
+      "tags": [
+        "utility",
+        "sanitization",
+        "llm-output",
+        "parsing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/agent/graph.py:build_graph",
+      "type": "function",
+      "name": "build_graph",
+      "filePath": "src/agent/graph.py",
+      "lineRange": [
+        61,
+        150
+      ],
+      "summary": "Baut den kompletten LangGraph auf: definiert die fünf Node-Funktionen als Closures, verdrahtet sie zum Ablauf get_schema → generate_sql → validate_sql → execute_sql → answer und hängt die bedingten Kanten für den Selbstkorrektur-Loop ein.",
+      "tags": [
+        "factory",
+        "orchestration",
+        "graph-construction",
+        "agent",
+        "core"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:src/agent/graph.py:run",
+      "type": "function",
+      "name": "run",
+      "filePath": "src/agent/graph.py",
+      "lineRange": [
+        153,
+        169
+      ],
+      "summary": "Bequeme Einstiegsfunktion: kompiliert den Graphen und lässt ihn mit einem frisch initialisierten AgentState für die übergebene Frage durchlaufen. Gibt den finalen State inklusive SQL, Ergebnis, Antwort und attempt_log zurück.",
+      "tags": [
+        "entry-point",
+        "api",
+        "agent",
+        "facade"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:src/agent/llm.py:get_llm",
+      "type": "function",
+      "name": "get_llm",
+      "filePath": "src/agent/llm.py",
+      "lineRange": [
+        18,
+        36
+      ],
+      "summary": "Liest LLM_PROVIDER und LLM_MODEL aus der Umgebung, wirft bei fehlender Konfiguration einen aussagekräftigen RuntimeError und liefert sonst das über init_chat_model erzeugte Chat-Modell zurück.",
+      "tags": [
+        "factory",
+        "configuration",
+        "llm",
+        "environment"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:src/agent/tools.py",
+      "type": "file",
+      "name": "tools.py",
+      "filePath": "src/agent/tools.py",
+      "summary": "Kapselt die beiden Datenbank-Operationen, die der LangGraph-Agent braucht: Schema-Introspektion fuer das SQL-Prompt und Ausfuehrung einer bereits validierten Query. Beide Funktionen bekommen die SQLAlchemy-Engine per Parameter, damit sie ohne .env-Setup einzeln testbar bleiben.",
+      "tags": [
+        "utility",
+        "database",
+        "agent-tools",
+        "schema-introspection"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Dependency Injection ueber Funktionsparameter statt Modul-globaler Engine — in Python ein einfaches, aber wirksames Muster fuer Testbarkeit."
+    },
+    {
+      "id": "file:src/db.py",
+      "type": "file",
+      "name": "db.py",
+      "filePath": "src/db.py",
+      "summary": "Zentrale SQLAlchemy-Verbindungsschicht des Agenten: baut die Engine immer fuer den eingeschraenkten agent_readonly-User, konfigurierbar ueber DATABASE_URL aus der .env. Bildet die zweite, von den Anwendungs-Guardrails unabhaengige Verteidigungslinie (Defense in Depth).",
+      "tags": [
+        "database",
+        "configuration",
+        "security",
+        "read-only"
+      ],
+      "complexity": "simple",
+      "languageNotes": "load_dotenv() laedt eine optionale .env in os.environ; fehlt sie, greift schlicht der Default-Wert — kein Fehlerfall."
+    },
+    {
+      "id": "document:docs/schema.md",
+      "type": "document",
+      "name": "schema.md",
+      "filePath": "docs/schema.md",
+      "summary": "Dokumentation des Olist-Datenbankschemas mit allen 9 Tabellen, ihren Verknüpfungen und einer Leseanleitung für das ER-Diagramm. Hält zusätzlich die zentrale Umsatz-Regel fest: Umsatz über SUM(order_items.price), nicht über payments.payment_value.",
+      "tags": [
+        "documentation",
+        "database",
+        "schema-definition",
+        "data-model"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:src/__init__.py",
+      "type": "file",
+      "name": "__init__.py",
+      "filePath": "src/__init__.py",
+      "summary": "Leerer Package-Marker, der src als Python-Package nutzbar macht (nötig für Aufrufe wie python -m src.agent.graph).",
+      "tags": [
+        "entry-point",
+        "package-marker",
+        "python",
+        "boilerplate"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:src/agent/__init__.py",
+      "type": "file",
+      "name": "__init__.py",
+      "filePath": "src/agent/__init__.py",
+      "summary": "Leerer Package-Marker für das Agent-Package src.agent (graph, guardrails, tools, llm, prompts).",
+      "tags": [
+        "entry-point",
+        "package-marker",
+        "python",
+        "boilerplate"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:src/agent/guardrails.py",
+      "type": "file",
+      "name": "guardrails.py",
+      "filePath": "src/agent/guardrails.py",
+      "summary": "Herzstück der Sicherheitsschicht: prüft vom LLM erzeugtes SQL gegen eine Whitelist (nur SELECT/WITH, genau ein Statement, keine Kommentare), erzwingt ein LIMIT und verifiziert die Query per EXPLAIN gegen die Datenbank, bevor sie wirklich ausgeführt wird.",
+      "tags": [
+        "validation",
+        "security",
+        "sql",
+        "guardrails",
+        "service",
+        "tested"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Die Validierung ist bewusst zweistufig: rein statische Regex-Checks (ohne DB, daher testbar ohne Infrastruktur) und erst danach ein EXPLAIN-Roundtrip gegen Postgres."
+    },
+    {
+      "id": "file:src/load_olist.py",
+      "type": "file",
+      "name": "load_olist.py",
+      "filePath": "src/load_olist.py",
+      "summary": "Einmaliges Import-Skript: liest die 9 rohen Olist-CSVs aus data/raw, wandelt Datums-/Zeitspalten in echte datetime-Typen um und schreibt sie per pandas to_sql als Tabellen nach Postgres (Admin-User, if_exists=\"replace\").",
+      "tags": [
+        "data-pipeline",
+        "etl",
+        "database",
+        "migration",
+        "script"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Läuft komplett auf Modulebene ohne Funktionsdefinitionen — ein bewusst einfaches One-Shot-Skript. Die Kommentare erklären absichtlich Python-Grundlagen (Tuple Unpacking, pathlib-/-Operator), das ist im Projekt gewollt."
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:src/agent/graph.py",
+      "target": "file:src/agent/guardrails.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/agent/graph.py",
+      "target": "file:src/agent/llm.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/agent/graph.py",
+      "target": "file:src/agent/prompts.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/agent/graph.py",
+      "target": "file:src/agent/tools.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/agent/graph.py",
+      "target": "file:src/db.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/agent/graph.py",
+      "target": "function:src/agent/graph.py:_strip_sql",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/agent/graph.py",
+      "target": "function:src/agent/graph.py:build_graph",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/agent/graph.py",
+      "target": "function:src/agent/graph.py:run",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/agent/llm.py",
+      "target": "function:src/agent/llm.py:get_llm",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:src/agent/graph.py",
+      "target": "function:src/agent/graph.py:build_graph",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/agent/graph.py",
+      "target": "function:src/agent/graph.py:run",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/agent/llm.py",
+      "target": "function:src/agent/llm.py:get_llm",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/agent/graph.py:build_graph",
+      "target": "function:src/agent/llm.py:get_llm",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/agent/graph.py:run",
+      "target": "function:src/agent/graph.py:build_graph",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "document:docs/schema.md",
+      "target": "file:src/load_olist.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/schema.md",
+      "target": "file:src/agent/prompts.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer:agent",
+      "name": "Agenten-Kern",
+      "description": "LangGraph-Orchestrierung des Ablaufs get_schema → generate_sql → validate_sql → execute_sql → answer samt Selbstkorrektur-Loop, SQL-Guardrails (SELECT/WITH-Whitelist, erzwungenes LIMIT, EXPLAIN-Pre-Check), Prompt-Templates, DB-Tool-Bindings und providerunabhängigem LLM-Setup.",
+      "nodeIds": [
+        "file:src/agent/graph.py",
+        "file:src/agent/guardrails.py",
+        "file:src/agent/tools.py",
+        "file:src/agent/prompts.py",
+        "file:src/agent/llm.py",
+        "file:src/agent/__init__.py",
+        "file:src/__init__.py"
+      ]
+    },
+    {
+      "id": "layer:data",
+      "name": "Datenebene",
+      "description": "Zugriff auf die Olist-Postgres-Datenbank über SQLAlchemy mit dem eingeschränkten agent_readonly-User, der einmalige CSV-Import der 9 Tabellen sowie die Schema-Dokumentation inklusive Umsatz-Regel (order_items.price statt payments.payment_value).",
+      "nodeIds": [
+        "file:src/db.py",
+        "file:src/load_olist.py",
+        "document:docs/schema.md"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "Projektüberblick",
+      "description": "Starte beim README: Es stellt den SQL Copilot als LangGraph-Agenten vor, der natürlichsprachige Fragen gegen die Olist-Postgres-Datenbank beantwortet, und begründet die zentrale Designentscheidung des Projekts — eine Whitelist erlaubter SQL-Konstrukte statt einer Blacklist verbotener. LEARNING-PATH.md vertieft das als erzählte Architekturkarte und ordnet jeder Station eine konkrete Quelldatei zu. Diese beiden Dokumente liefern das Vokabular für alles Weitere: Guardrails, Selbstkorrektur-Loop und die zwei Verteidigungslinien.",
+      "nodeIds": [
+        "document:README.md",
+        "document:LEARNING-PATH.md"
+      ]
+    },
+    {
+      "order": 2,
+      "title": "Lokale Postgres-Umgebung",
+      "description": "Bevor Code läuft, braucht es die Datenbank. docker-compose.yml fährt einen einzelnen Postgres-16-Container hoch — Datenbank olist, Port 5432 nach außen, benanntes Volume pgdata für dauerhafte Speicherung. .env.example zeigt die Gegenseite: die Verbindungszeichenfolge für den eingeschränkten Benutzer agent_readonly sowie LLM_PROVIDER und LLM_MODEL, über die später der Sprachmodell-Anbieter gewählt wird. Beide Dateien sind bewusst minimal gehalten, passend zum Zeitbudget eines Portfolio-Projekts.",
+      "nodeIds": [
+        "service:docker-compose.yml",
+        "config:.env.example"
+      ],
+      "languageLesson": "docker compose: Ein benanntes Volume (pgdata) überlebt das Löschen des Containers — ohne es wären die importierten Daten nach jedem `docker compose down` weg. Das Port-Mapping `5432:5432` bildet den Container-Port auf den Host ab, erst dadurch erreicht SQLAlchemy die DB über localhost."
+    },
+    {
+      "order": 3,
+      "title": "Datenimport und Schema",
+      "description": "load_olist.py ist ein einmaliges Import-Skript: Es liest die neun rohen Olist-CSVs, wandelt Datums- und Zeitspalten in echte datetime-Typen um und schreibt sie über pandas to_sql als Tabellen nach Postgres — mit dem Admin-Benutzer, denn Schreibrechte braucht nur dieser Schritt. docs/schema.md dokumentiert das entstandene Modell: alle neun Tabellen, ihre Verknüpfungen und die zentrale Fachregel des Projekts, dass Umsatz über SUM(order_items.price) berechnet wird und nicht über payments.payment_value. Diese Regel ist der klassische Stolperstein des Olist-Datensatzes und taucht später in den Eval-Fragen wieder auf.",
+      "nodeIds": [
+        "file:src/load_olist.py",
+        "document:docs/schema.md"
+      ],
+      "languageLesson": "Das Skript läuft komplett auf Modulebene ohne Funktionsdefinitionen — ein bewusst einfaches One-Shot-Skript. Die Kommentare erklären absichtlich Python-Grundlagen wie Tuple Unpacking und den `/`-Operator von pathlib, weil das Repo als Lernprojekt gedacht ist."
+    }
+  ]
+}
