@@ -317,26 +317,22 @@ ist (Reduktions-Pipeline, Layout, Szenen-Integration) und was zugekauft
   Aufwand ohne Nutzen wäre.
 - **Rohgraph im Repo** — nur die reduzierte Fassung wird committed. Die
   `.ua/`-Rohdaten bleiben lokal.
-## Offener Punkt: Sprache der Summaries
+## Erledigt: Sprache der Summaries
 
-Die Seite ist durchgängig deutsch (Produktprinzip 4). `/understand --language`
-unterstützt Deutsch **nicht** (nur en, zh, zh-TW, ja, ko, ru) — die Summaries
-im Rohgraph kommen also auf Englisch.
+Die Seite ist durchgängig deutsch (Produktprinzip 4). Diese Spec hatte offen
+gelassen, wie die Summaries dorthin kommen, weil das README Deutsch nicht
+unter den unterstützten Ausgabesprachen listet (nur en, zh, zh-TW, ja, ko, ru)
+und ohne echte Daten nicht entscheidbar war, wie brauchbar englische Summaries
+wären.
 
-Das ist der einzige Punkt, den diese Spec bewusst offen lässt, weil er sich
-ohne echte Daten nicht sinnvoll entscheiden lässt: es hängt davon ab, wie
-brauchbar die englischen Summaries überhaupt sind. Drei Wege stehen offen:
+**Am Pilot beantwortet (2026-08-05): es ist nichts zu tun.** `.ua/config.json`
+trägt `{"outputLanguage": "de"}`, und der erzeugte Graph ist durchgängig
+deutsch — Layer heißen „Agenten-Kern", „Datenebene", „Präsentationsebene", die
+Modul-Summaries sind ausformuliertes Deutsch. Undokumentiert, aber funktionierend.
 
-1. Layer-Labels und -Summaries über die Override-Datei von Hand deutsch
-   setzen (bei 6 Layern pro Repo überschaubar, und redaktionell ohnehin
-   die beste Qualität).
-2. Im Generator einen Übersetzungsschritt ergänzen.
-3. Nur Layer-Labels deutsch, Modul-Summaries englisch belassen (Dateinamen
-   und Code sind ohnehin englisch).
-
-**Entschieden wird das am Pilot `sql-copilot`**, sobald der erste echte
-Rohgraph vorliegt — nicht vorher. Bis dahin ist Weg 1 die Arbeitsannahme,
-weil er ohne zusätzliche Abhängigkeit auskommt.
+Weder ein Übersetzungsschritt im Generator noch handgesetzte Layer-Labels sind
+nötig. Der Override-Weg (`labels` in `tools/atlas-overrides/<id>.json`) bleibt
+als Rückfallebene bestehen, falls ein späteres Repo doch englisch herauskommt.
 
 ## Definition of Done
 

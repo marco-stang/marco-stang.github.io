@@ -113,27 +113,87 @@ git commit -m "Atlas: echtes Rohschema von Understand-Anything als Fixture festg
 
 ### Task 2: Adapter `normalizeGraph` — Rohgraph auf ein stabiles Zwischenformat
 
-Trennt das fremde, undokumentierte Schema vom eigenen Code. Ändert Understand-Anything sein Format, kostet das **nur diese Datei**.
+Trennt das fremde, undokumentierte Schema vom eigenen Code. Ändert
+Understand-Anything sein Format, kostet das **nur diese Datei**.
+
+> **Diese Task wurde am 2026-08-05 gegen das echte Schema neu geschrieben.**
+> Die ursprüngliche Fassung riet dreimal falsch — jedes Mal auf eine Art, die
+> still funktioniert und leise Unsinn liefert statt zu scheitern. Siehe
+> [`2026-08-05-atlas-rohschema.md`](2026-08-05-atlas-rohschema.md).
 
 **Files:**
 - Create: `tools/atlas-normalize.mjs`
 - Test: `tests/atlas-normalize.test.js`
 
 **Interfaces:**
-- Consumes: die Fixture aus Task 1.
+- Consumes: `tests/fixtures/knowledge-graph.sql-copilot.json` (echter Ausschnitt aus Task 1).
 - Produces:
   ```js
   export function normalizeGraph(raw): {
     nodes: Array<{
-      id: string,        // stabil, eindeutig
-      label: string,     // kurzer Anzeigename (Dateiname ohne Pfad)
+      id: string,        // die Roh-id inkl. Typpraefix, z.B. "file:src/db.py"
+      label: string,     // Dateiname ohne Pfad
       file: string,      // Pfad relativ zum Repo-Root
-      layer: string,     // Layer-Schlüssel, "" wenn unbekannt
+      layer: string,     // Layer-id ohne "layer:"-Praefix, "" wenn keine
       summary: string,   // "" wenn nicht vorhanden
       deps: string[]     // ids, immer ein Array, nie undefined
-    }>
+    }>,
+    layers: Array<{ id: string, label: string, summary: string }>
   }
   ```
+
+**Warum `layers` mit zurückkommt:** der Rohgraph liefert pro Layer einen
+ausformulierten deutschen Namen („Agenten-Kern") und eine Beschreibung von
+163–276 Zeichen. `reduceGraph` erfindet den Layer-Titel bisher aus dem
+Schlüssel und die Layer-Summary aus der Summary des ersten Moduls. Diese
+echten Texte sind unvergleichlich besser und dürfen nicht verloren gehen.
+
+## Das echte Schema in Kürze
+
+Vollständig in [`2026-08-05-atlas-rohschema.md`](2026-08-05-atlas-rohschema.md).
+Die drei Punkte, die den Adapter bestimmen:
+
+**1. Es gibt kein `layer`-Feld am Knoten.** Die Zuordnung steht invertiert:
+
+```json
+"layers": [
+  { "id": "layer:agent", "name": "Agenten-Kern", "description": "…",
+    "nodeIds": ["file:src/agent/graph.py", "file:src/agent/guardrails.py"] }
+]
+```
+
+**2. Es gibt kein `deps`-Feld am Knoten.** Kanten stehen im eigenen
+Top-Level-Array:
+
+```json
+"edges": [
+  { "source": "file:evals/run_evals.py", "target": "file:src/agent/graph.py",
+    "type": "imports", "direction": "forward", "weight": 0.7 }
+]
+```
+
+**3. Layer decken nur die Datei-Ebene ab** — 26 von 63 Knoten
+(`file`/`config`/`document`/`service`). Die 37 `function`- und `class`-Knoten
+stehen in keiner `nodeIds`-Liste.
+
+## Zwei Entscheidungen, die diese Task trifft
+
+**Nur Knoten behalten, die in einem Layer vorkommen.** Das ist exakt die
+Datei-Ebene und damit die Granularität, die „Modul" in der Spec meint. Nähme
+man alle 63, fluteten Funktions-Knoten ohne Layer den Sammel-Ring, und die
+Kappung nach Fan-in würde in einem Layer bevorzugt einzelne Funktionen zeigen
+statt der Dateien, zu denen sie gehören — man sähe `_strip_sql`, aber nicht
+`graph.py`. Funktions-Granularität wäre eine vierte Tiefenstufe und ist
+nicht Teil dieser Spec.
+
+**`contains`-Kanten fallen weg** — zusammen mit `calls` und `exports`, und
+zwar von allein: sie verbinden Dateien mit ihren eigenen Funktionen, und die
+Funktions-Knoten sind bereits raus. Im echten Graphen bleiben von 144 Kanten
+50 übrig (`documents` 22, `imports` 13, `configures` 8, `related` 4,
+`deploys` 2, `tested_by` 1). Es braucht also **keine** Typ-Whitelist: die
+Knotenauswahl filtert die Hierarchie-Kanten bereits vollständig heraus. Eine
+zusätzliche Whitelist wäre Redundanz, die bei einem anderen Repo womöglich
+echte Kanten schluckt.
 
 - [ ] **Step 1: Test schreiben**
 
@@ -165,6 +225,56 @@ test("jeder normalisierte Knoten erfuellt den Vertrag", () => {
   }
 });
 
+test("behaelt genau die Knoten, die in einem Layer vorkommen", () => {
+  const { nodes } = normalizeGraph(FIXTURE);
+  const inLayer = new Set(FIXTURE.layers.flatMap((l) => l.nodeIds));
+  assert.equal(nodes.length, inLayer.size);
+  for (const n of nodes) assert.ok(inLayer.has(n.id));
+});
+
+test("verwirft Funktions- und Klassenknoten, die in keinem Layer stehen", () => {
+  const { nodes } = normalizeGraph(FIXTURE);
+  // Die Fixture enthaelt bewusst 4 solche Knoten.
+  assert.ok(FIXTURE.nodes.some((n) => n.type === "function"), "Fixture-Annahme");
+  assert.ok(!nodes.some((n) => n.id.startsWith("function:")));
+  assert.ok(!nodes.some((n) => n.id.startsWith("class:")));
+});
+
+test("jeder Knoten traegt einen nicht-leeren Layer aus layers[].nodeIds", () => {
+  const { nodes } = normalizeGraph(FIXTURE);
+  for (const n of nodes) assert.ok(n.layer.length > 0, `${n.id} ohne Layer`);
+});
+
+test("das layer-Praefix wird abgeschnitten", () => {
+  const { nodes } = normalizeGraph(FIXTURE);
+  assert.ok(nodes.some((n) => n.layer === "agent"));
+  assert.ok(!nodes.some((n) => n.layer.startsWith("layer:")));
+});
+
+test("liefert Layer-Metadaten mit echtem Namen und Beschreibung", () => {
+  const { layers } = normalizeGraph(FIXTURE);
+  const agent = layers.find((l) => l.id === "agent");
+  assert.ok(agent, "layer:agent muss dabei sein");
+  assert.equal(agent.label, "Agenten-Kern");
+  assert.ok(agent.summary.length > 50, "Beschreibung ist ausformulierte Prosa");
+});
+
+test("deps kommen aus dem edges-Array, nicht vom Knoten", () => {
+  const { nodes } = normalizeGraph(FIXTURE);
+  const total = nodes.reduce((sum, n) => sum + n.deps.length, 0);
+  assert.ok(total > 0, "es muss Abhaengigkeiten geben");
+  // Gegenprobe: kein Rohknoten hat ueberhaupt ein deps-Feld.
+  assert.ok(FIXTURE.nodes.every((n) => n.deps === undefined));
+});
+
+test("deps stehen beim source-Knoten, nicht beim target", () => {
+  const { nodes } = normalizeGraph(FIXTURE);
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const edge = FIXTURE.edges.find((e) => byId.has(e.source) && byId.has(e.target));
+  assert.ok(edge, "Fixture-Annahme: mindestens eine Kante zwischen Layer-Knoten");
+  assert.ok(byId.get(edge.source).deps.includes(edge.target));
+});
+
 test("ids sind eindeutig", () => {
   const { nodes } = normalizeGraph(FIXTURE);
   assert.equal(new Set(nodes.map((n) => n.id)).size, nodes.length);
@@ -178,24 +288,74 @@ test("deps verweisen nur auf existierende ids", () => {
   }
 });
 
+test("deps enthalten keine Selbstbezuege und keine Duplikate", () => {
+  const { nodes } = normalizeGraph(FIXTURE);
+  for (const n of nodes) {
+    assert.ok(!n.deps.includes(n.id), `${n.id} zeigt auf sich selbst`);
+    assert.equal(new Set(n.deps).size, n.deps.length, `${n.id} hat doppelte deps`);
+  }
+});
+
 test("label ist der Dateiname ohne Pfad", () => {
-  const raw = { nodes: [{ id: "a", path: "src/deep/app.py" }] };
-  const { nodes } = normalizeGraph(raw);
-  assert.equal(nodes[0].label, "app.py");
+  const raw = {
+    nodes: [{ id: "file:src/deep/app.py", filePath: "src/deep/app.py" }],
+    edges: [],
+    layers: [{ id: "layer:ui", name: "UI", description: "d", nodeIds: ["file:src/deep/app.py"] }]
+  };
+  assert.equal(normalizeGraph(raw).nodes[0].label, "app.py");
 });
 
 test("fehlende Felder werden zu leeren Werten, nicht zu undefined", () => {
-  const raw = { nodes: [{ id: "a" }] };
-  const { nodes } = normalizeGraph(raw);
+  const raw = {
+    nodes: [{ id: "file:a" }],
+    edges: [],
+    layers: [{ id: "layer:x", nodeIds: ["file:a"] }]
+  };
+  const { nodes, layers } = normalizeGraph(raw);
   assert.equal(nodes[0].summary, "");
-  assert.equal(nodes[0].layer, "");
+  assert.equal(nodes[0].file, "");
   assert.deepEqual(nodes[0].deps, []);
+  assert.equal(layers[0].label, "x", "ohne name faellt das Label auf die id zurueck");
+  assert.equal(layers[0].summary, "");
 });
 
-test("leerer oder kaputter Rohgraph wirft nicht, sondern liefert leere Knoten", () => {
-  assert.deepEqual(normalizeGraph(null).nodes, []);
-  assert.deepEqual(normalizeGraph({}).nodes, []);
-  assert.deepEqual(normalizeGraph({ nodes: "kaputt" }).nodes, []);
+test("Kanten auf verworfene Knoten werden entfernt", () => {
+  const raw = {
+    nodes: [{ id: "file:a", filePath: "a.py" }, { id: "function:a.py:helper", filePath: "a.py" }],
+    edges: [{ source: "file:a", target: "function:a.py:helper", type: "contains" }],
+    layers: [{ id: "layer:x", name: "X", description: "d", nodeIds: ["file:a"] }]
+  };
+  const { nodes } = normalizeGraph(raw);
+  assert.equal(nodes.length, 1);
+  assert.deepEqual(nodes[0].deps, [], "contains-Kante auf einen verworfenen Knoten faellt weg");
+});
+
+test("ein Layer ohne existierende Knoten taucht nicht in layers auf", () => {
+  const raw = {
+    nodes: [{ id: "file:a", filePath: "a.py" }],
+    edges: [],
+    layers: [
+      { id: "layer:x", name: "X", description: "d", nodeIds: ["file:a"] },
+      { id: "layer:leer", name: "Leer", description: "d", nodeIds: ["file:gibtsnicht"] }
+    ]
+  };
+  const { layers } = normalizeGraph(raw);
+  assert.deepEqual(layers.map((l) => l.id), ["x"]);
+});
+
+test("leerer oder kaputter Rohgraph wirft nicht", () => {
+  for (const bad of [null, undefined, {}, { nodes: "kaputt" }, { nodes: [], layers: "kaputt" }, { layers: [{ nodeIds: "kaputt" }] }]) {
+    const out = normalizeGraph(bad);
+    assert.deepEqual(out.nodes, []);
+    assert.deepEqual(out.layers, []);
+  }
+});
+
+test("ist deterministisch", () => {
+  assert.equal(
+    JSON.stringify(normalizeGraph(FIXTURE)),
+    JSON.stringify(normalizeGraph(FIXTURE))
+  );
 });
 ```
 
@@ -210,52 +370,34 @@ Erwartet: FAIL, `Cannot find module '../tools/atlas-normalize.mjs'`.
 
 - [ ] **Step 3: Adapter implementieren**
 
-Erstelle `tools/atlas-normalize.mjs`. **Die Feldnamen in `NODE_ARRAY_KEYS`, `pickPath`, `pickLayer`, `pickSummary` und `pickDeps` an das in Task 1 dokumentierte Schema anpassen** — die Tests prüfen den *Vertrag*, nicht die Zuordnung, also ändern sich nur diese Zeilen.
+Erstelle `tools/atlas-normalize.mjs`:
 
 ```js
-// Adapter zwischen der undokumentierten .ua/knowledge-graph.json von
-// Understand-Anything und unserem stabilen Zwischenformat. Alles, was vom
-// fremden Schema abhaengt, steht in DIESER Datei — aendert das Tool sein
-// Format, ist das hier die einzige Baustelle.
-// Das beobachtete Rohschema steht in docs/superpowers/plans/2026-08-05-atlas-rohschema.md
+// Adapter zwischen der .ua/knowledge-graph.json von Understand-Anything und
+// unserem stabilen Zwischenformat. Alles, was vom fremden Schema abhaengt,
+// steht in DIESER Datei — aendert das Tool sein Format, ist das hier die
+// einzige Baustelle.
+//
+// Das beobachtete Rohschema (Graph-Version 1.0.0) steht in
+// docs/superpowers/plans/2026-08-05-atlas-rohschema.md. Es ist nirgends
+// offiziell dokumentiert, also ist jenes Dokument die einzige Referenz.
+//
+// Drei Eigenheiten bestimmen diesen Adapter:
+//  1. Knoten haben KEIN layer-Feld. Die Zuordnung steht invertiert in
+//     layers[].nodeIds.
+//  2. Knoten haben KEIN deps-Feld. Kanten stehen im Top-Level-Array edges[]
+//     als { source, target, type, ... }.
+//  3. Layer decken nur die Datei-Ebene ab (file/config/document/service),
+//     nicht die Funktions- und Klassenknoten.
 
-// Reihenfolge = Priorität; der erste Treffer gewinnt.
-const NODE_ARRAY_KEYS = ["nodes", "entities", "files", "symbols"];
-const PATH_KEYS = ["path", "file", "filePath", "relativePath"];
-const LAYER_KEYS = ["layer", "architecturalLayer", "category", "group"];
-const SUMMARY_KEYS = ["summary", "description", "doc", "explanation"];
-const DEPS_KEYS = ["deps", "dependencies", "imports", "requires"];
+const LAYER_ID_PREFIX = "layer:";
 
-function firstString(obj, keys) {
-  for (const k of keys) {
-    const v = obj?.[k];
-    if (typeof v === "string" && v.length > 0) return v;
-  }
-  return "";
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
 }
 
-function pickDeps(node) {
-  for (const k of DEPS_KEYS) {
-    const v = node?.[k];
-    if (Array.isArray(v)) {
-      return v
-        .map((d) => (typeof d === "string" ? d : typeof d?.id === "string" ? d.id : typeof d?.target === "string" ? d.target : null))
-        .filter(Boolean);
-    }
-  }
-  return [];
-}
-
-function findNodeArray(raw) {
-  for (const k of NODE_ARRAY_KEYS) {
-    if (Array.isArray(raw?.[k])) return raw[k];
-  }
-  // Fallback: das laengste Array auf oberster Ebene, dessen Elemente eine id tragen.
-  const candidates = Object.values(raw ?? {}).filter(
-    (v) => Array.isArray(v) && v.length > 0 && typeof v[0] === "object" && v[0] !== null
-  );
-  candidates.sort((a, b) => b.length - a.length);
-  return candidates[0] ?? [];
+function str(value) {
+  return typeof value === "string" ? value : "";
 }
 
 function basename(path) {
@@ -263,33 +405,66 @@ function basename(path) {
   return parts[parts.length - 1] || String(path);
 }
 
-export function normalizeGraph(raw) {
-  const source = findNodeArray(raw);
-  const seen = new Set();
-  const nodes = [];
+function stripLayerPrefix(id) {
+  return id.startsWith(LAYER_ID_PREFIX) ? id.slice(LAYER_ID_PREFIX.length) : id;
+}
 
-  for (const entry of source) {
-    if (!entry || typeof entry !== "object") continue;
-    const id = typeof entry.id === "string" && entry.id ? entry.id : firstString(entry, PATH_KEYS);
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    const file = firstString(entry, PATH_KEYS);
+export function normalizeGraph(raw) {
+  const rawNodes = asArray(raw?.nodes);
+  const rawLayers = asArray(raw?.layers);
+  const rawEdges = asArray(raw?.edges);
+
+  const nodeById = new Map();
+  for (const n of rawNodes) {
+    if (n && typeof n === "object" && str(n.id)) nodeById.set(n.id, n);
+  }
+
+  // Layer-Zuordnung invertieren. Nur Knoten, die tatsaechlich existieren —
+  // ein nodeIds-Eintrag ins Leere darf keinen Geisterknoten erzeugen.
+  const layerOfNode = new Map();
+  const layers = [];
+  for (const l of rawLayers) {
+    if (!l || typeof l !== "object" || !str(l.id)) continue;
+    const key = stripLayerPrefix(l.id);
+    const members = asArray(l.nodeIds).filter((id) => nodeById.has(id));
+    if (members.length === 0) continue;
+    for (const id of members) {
+      // Erster Treffer gewinnt: der echte Graph kennt keine Mehrfach-
+      // zuordnung, aber darauf verlassen wollen wir uns nicht.
+      if (!layerOfNode.has(id)) layerOfNode.set(id, key);
+    }
+    layers.push({ id: key, label: str(l.name) || key, summary: str(l.description) });
+  }
+
+  // Nur Knoten mit Layer behalten — das ist die Datei-Ebene und damit die
+  // Granularitaet, die "Modul" in der Spec meint. Funktions- und
+  // Klassenknoten wuerden sonst den Sammelring fluten.
+  const nodes = [];
+  for (const [id, layer] of layerOfNode) {
+    const n = nodeById.get(id);
+    const file = str(n.filePath);
     nodes.push({
       id,
-      label: file ? basename(file) : id,
+      label: file ? basename(file) : str(n.name) || id,
       file,
-      layer: firstString(entry, LAYER_KEYS),
-      summary: firstString(entry, SUMMARY_KEYS),
-      deps: pickDeps(entry)
+      layer,
+      summary: str(n.summary),
+      deps: []
     });
   }
 
-  // Kanten ins Leere entfernen: die Szene wuerde sonst auf Knoten zeigen,
-  // die es nach der Kappung (oder schon im Rohgraph) gar nicht gibt.
-  const ids = new Set(nodes.map((n) => n.id));
-  for (const n of nodes) n.deps = n.deps.filter((d) => ids.has(d) && d !== n.id);
+  // Kanten am source-Knoten anhaengen. Beide Enden muessen ueberlebt haben,
+  // sonst zeigt die Szene auf nichts. Selbstbezuege und Duplikate raus.
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  for (const e of rawEdges) {
+    if (!e || typeof e !== "object") continue;
+    const from = byId.get(str(e.source));
+    const target = str(e.target);
+    if (!from || !byId.has(target) || target === from.id) continue;
+    if (!from.deps.includes(target)) from.deps.push(target);
+  }
 
-  return { nodes };
+  return { nodes, layers };
 }
 ```
 
@@ -299,12 +474,73 @@ export function normalizeGraph(raw) {
 npm test
 ```
 
-Erwartet: PASS. Schlägt einer der Fixture-Tests fehl, stimmt eine Feldzuordnung nicht — im dokumentierten Rohschema nachsehen und die `*_KEYS`-Listen korrigieren, **nicht** den Test aufweichen.
+Erwartet: PASS. Schlägt ein Fixture-Test fehl, stimmt eine Feldzuordnung
+nicht — im dokumentierten Rohschema nachsehen und die Zuordnung korrigieren,
+**nicht** den Test aufweichen.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: `reduceGraph` die echten Layer-Texte nutzen lassen**
+
+`tools/atlas-reduce.mjs` erfindet den Layer-Titel bisher aus dem Schlüssel und
+die Layer-Summary aus der Summary des ersten Moduls. Jetzt gibt es echte,
+deutsche Texte. Die Signatur bekommt ein optionales `layerMeta`:
+
+```js
+// in reduceGraph(nodes, options): options um layerMeta erweitern
+const { id, repo, generatedAt, source, overrides = null, layerMeta = [] } = options;
+const metaById = new Map(layerMeta.map((l) => [l.id, l]));
+```
+
+und beim Aufbau von `layers`:
+
+```js
+    const meta = metaById.get(key);
+    layers.push({
+      id: key,
+      // Reihenfolge: Override schlaegt echten Namen schlaegt Schluessel.
+      label: labels[key] ?? meta?.label ?? key,
+      summary: meta?.summary ?? chosen[0]?.summary ?? "",
+      count: all.length
+    });
+```
+
+Ergänze in `tests/atlas-reduce.test.js` zwei Tests:
+
+```js
+test("nutzt Layer-Metadaten fuer Titel und Beschreibung", () => {
+  const atlas = reduceGraph(fanIn("agent", 2), {
+    ...OPTS,
+    layerMeta: [{ id: "agent", label: "Agenten-Kern", summary: "LangGraph-Orchestrierung." }]
+  });
+  const layer = atlas.layers.find((l) => l.id === "agent");
+  assert.equal(layer.label, "Agenten-Kern");
+  assert.equal(layer.summary, "LangGraph-Orchestrierung.");
+});
+
+test("labels-Override schlaegt die Layer-Metadaten", () => {
+  const atlas = reduceGraph(fanIn("agent", 2), {
+    ...OPTS,
+    layerMeta: [{ id: "agent", label: "Agenten-Kern", summary: "s" }],
+    overrides: { labels: { agent: "Eigener Titel" } }
+  });
+  assert.equal(atlas.layers.find((l) => l.id === "agent").label, "Eigener Titel");
+});
+```
+
+Die vorhandenen `reduceGraph`-Tests müssen **unverändert** weiterlaufen —
+ohne `layerMeta` bleibt das Verhalten exakt wie bisher.
+
+- [ ] **Step 6: Tests laufen lassen**
 
 ```bash
-git add tools/atlas-normalize.mjs tests/atlas-normalize.test.js
+npm test
+```
+
+Erwartet: PASS, alle bisherigen plus die neuen.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add tools/atlas-normalize.mjs tests/atlas-normalize.test.js tools/atlas-reduce.mjs tests/atlas-reduce.test.js
 git commit -m "Atlas: Adapter vom Understand-Anything-Rohgraph aufs Zwischenformat"
 ```
 
@@ -625,7 +861,7 @@ const graphPath = `${repoPath.replace(/[/\\]$/, "")}/.ua/knowledge-graph.json`;
 if (!existsSync(graphPath)) fail(`${graphPath} nicht gefunden — erst /understand im Repo laufen lassen.`);
 
 const raw = JSON.parse(readFileSync(graphPath, "utf8"));
-const { nodes } = normalizeGraph(raw);
+const { nodes, layers } = normalizeGraph(raw);
 if (nodes.length === 0) fail("Rohgraph enthaelt keine verwertbaren Knoten — Rohschema pruefen.");
 
 const overridePath = `${OVERRIDES_DIR}${projectId}.json`;
@@ -638,6 +874,9 @@ const atlas = reduceGraph(nodes, {
   // obwohl sich inhaltlich nichts geaendert hat.
   generatedAt: new Date().toISOString().slice(0, 10),
   source: { tool: "understand-anything", version: raw?.version ?? "unbekannt", license: "MIT" },
+  // Echte, deutsche Layer-Namen und -Beschreibungen aus dem Rohgraphen statt
+  // aus dem Schluessel erfundener Titel.
+  layerMeta: layers,
   overrides
 });
 
@@ -1520,31 +1759,27 @@ node tools/gen-atlas.mjs . marco-os
 
 Sollte `marco-os` nicht als id in `data/projects.js` stehen, bricht der Generator mit einer klaren Meldung ab — dann die dort tatsächlich vorhandene id verwenden.
 
-- [ ] **Step 2: Sprachentscheidung treffen**
+- [ ] **Step 2: Sprache prüfen — die Entscheidung ist bereits gefallen**
 
-Die Spec hat diesen Punkt bewusst offen gelassen (Abschnitt „Offener Punkt: Sprache der Summaries"), weil er ohne echte Daten nicht entscheidbar war. Jetzt liegen die Daten vor:
+Die Spec hatte diesen Punkt offen gelassen, weil er ohne echte Daten nicht entscheidbar war. **Task 1 hat ihn beantwortet: es ist nichts zu tun.** `.ua/config.json` trägt `{"outputLanguage": "de"}`, und der erzeugte Graph ist durchgängig deutsch — Layer heißen „Agenten-Kern", „Datenebene", „Präsentationsebene", die Modul-Summaries sind ausformuliertes Deutsch. Das README listet Deutsch nicht unter den unterstützten Sprachen (nur en, zh, zh-TW, ja, ko, ru); es funktioniert trotzdem.
+
+Weder ein Übersetzungsschritt im Generator noch handgesetzte Labels in einer Override-Datei sind nötig. Nur gegenprüfen:
 
 ```bash
-node -e "const a=require('./data/atlas/sql-agent.json'); console.log(a.layers.map(l=>l.id+' → '+l.label).join('\n')); console.log('---'); console.log(a.modules.slice(0,5).map(m=>m.label+': '+m.summary).join('\n'));"
+node -e "const a=require('./data/atlas/sql-agent.json'); console.log(a.layers.map(l=>l.id+' → '+l.label).join('\n')); console.log('---'); console.log(a.modules.slice(0,3).map(m=>m.label+': '+m.summary.slice(0,90)).join('\n'));"
 ```
 
-Sind die Layer-Labels englisch oder technisch unschön, die Override-Datei anlegen — das ist Arbeitsannahme „Weg 1" aus der Spec und kommt ohne zusätzliche Abhängigkeit aus:
+Erwartet: deutsche Layer-Namen und deutsche Summaries. Sollte ein späteres Repo doch englisch herauskommen (etwa weil `outputLanguage` dort fehlt), ist der Weg die Override-Datei:
 
 ```bash
 mkdir -p tools/atlas-overrides
-cat > tools/atlas-overrides/sql-agent.json <<'EOF'
-{
-  "labels": {
-    "ui": "Oberfläche",
-    "agent": "Agent-Logik",
-    "data": "Datenzugriff"
-  }
-}
+cat > tools/atlas-overrides/<projekt-id>.json <<'EOF'
+{ "labels": { "<layer-id>": "Deutscher Titel" } }
 EOF
-node tools/gen-atlas.mjs ../sql-copilot sql-agent
+node tools/gen-atlas.mjs ../<repo> <projekt-id>
 ```
 
-Die Schlüssel links müssen den tatsächlichen Layer-ids aus der Ausgabe oben entsprechen.
+Die Schlüssel müssen den tatsächlichen Layer-ids aus der Ausgabe oben entsprechen (ohne `layer:`-Präfix).
 
 - [ ] **Step 3: Größe gegen die 50-KB-Grenze prüfen**
 
