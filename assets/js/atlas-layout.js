@@ -25,8 +25,17 @@ const NARROW_RING_STEP = 32;
 // derselben Speiche uebereinander liegen.
 const RING_ANGLE_OFFSET_DEG = 37;
 
+// Fix-Runde 3 (Task-8-Review): unter NARROW_VIEWPORT bleibt es bei Stufe 1
+// (kein Atlas) statt Stufe 2 (Ringe ohne Module). Gemessen bei 375px: das
+// Projektfenster hat eine feste Mindestbreite von 320px, es bleiben nur 55px
+// freie Flaeche — alle sechs Ringe liegen vollstaendig unterm Fenster, es
+// gibt dort schlicht nichts zu sehen. Marcos Entscheidung: einen Regler
+// anzubieten, der nachweislich nichts bewirkt, ist unehrlich, deshalb
+// erscheint er unter dieser Breite in index.html gar nicht erst
+// (atlasAvailable verlangt maxLevelFor(w) > 1). Das ueberstimmt bewusst die
+// urspruengliche Spec-Regel "unter 760px zwei Stufen".
 export function maxLevelFor(width) {
-  return width < NARROW_VIEWPORT ? 2 : 3;
+  return width < NARROW_VIEWPORT ? 1 : 3;
 }
 
 function clamp(value, min, max) {

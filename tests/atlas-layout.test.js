@@ -81,15 +81,19 @@ test("der Sammelknoten wird als more markiert", () => {
   assert.equal(nodes.find((n) => n.id === "app").more, false);
 });
 
-test("maxLevelFor erlaubt Stufe 3 erst ab NARROW_VIEWPORT", () => {
-  assert.equal(maxLevelFor(NARROW_VIEWPORT - 1), 2);
+// Fix-Runde 3 (Task-8-Review): unter NARROW_VIEWPORT bleibt es bei Stufe 1
+// (kein Atlas) statt vormals Stufe 2 -- das Projektfenster laesst dort so
+// wenig freie Flaeche, dass Ringe ohnehin komplett darunter liegen wuerden.
+test("maxLevelFor erlaubt nur Stufe 1 unterhalb von NARROW_VIEWPORT, Stufe 3 ab dort", () => {
+  assert.equal(maxLevelFor(NARROW_VIEWPORT - 1), 1);
   assert.equal(maxLevelFor(NARROW_VIEWPORT), 3);
   assert.equal(maxLevelFor(1280), 3);
 });
 
-test("Stufe 3 auf schmalem Viewport faellt auf Stufe 2 zurueck", () => {
-  const { nodes } = computeAtlasLayout(ATLAS, { level: 3, cx: 160, cy: 300, w: 375, h: 700 });
+test("Stufe 3 auf schmalem Viewport faellt auf maxLevelFor(w) zurueck (heute Stufe 1)", () => {
+  const { nodes, edges } = computeAtlasLayout(ATLAS, { level: 3, cx: 160, cy: 300, w: 375, h: 700 });
   assert.equal(nodes.length, 0);
+  assert.equal(edges.length, 0);
 });
 
 test("ist deterministisch", () => {

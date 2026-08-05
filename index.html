@@ -148,11 +148,28 @@ button{font:inherit}
             <circle cx="{{ an.x }}" cy="{{ an.y }}" r="{{ an.radius }}"
                     fill="{{ an.fill }}" stroke="#b48cf5" stroke-width="1"
                     stroke-dasharray="{{ an.dash }}"></circle>
-            <text x="{{ an.x }}" y="{{ an.labelY }}" text-anchor="middle"
-                  style="font:500 9px/1 'JetBrains Mono',monospace;fill:#8a86a8">{{ an.label }}</text>
           </g>
         </sc-for>
       </svg>
+
+      <!-- Fix-Runde 3, fuenfte Runtime-Falle dieser dc-Runtime (siehe
+           CLAUDE.md): jede {{ }}-Interpolation wird als <span class="sc-interp">
+           gerendert. In HTML ist das unsichtbar, aber ein HTML-<span> als Kind
+           eines SVG-<text> zeichnet UEBERHAUPT NICHTS -- SVG akzeptiert dort
+           nur echte Zeichendaten oder tspan/textPath. Gemessen: alle 24
+           <text>-Elemente standen mit korrektem Inhalt und sichtbaren Styles
+           im DOM, getBBox() lieferte trotzdem 0x0. Deshalb hier KEIN
+           SVG-<text>, sondern absolut positioniertes HTML im selben Layer wie
+           die Planeten-Buttons unten -- genau das Muster, das dieses Repo fuer
+           Beschriftungen schon durchgaengig benutzt (siehe n.title). Der Layer
+           liegt innerhalb derselben skalierten Buehne wie die Modulpunkte,
+           wandert also mit ihnen mit; 9px Schriftgroesse werden bei
+           Atlas-Skalierung (~1.69x) zu ~15px auf dem Schirm, lesbar.
+           pointer-events:none ist Pflicht: sonst faengt das Label-Div den
+           Hover vom Modulpunkt darunter ab, bevor die Maus ihn erreicht. -->
+      <sc-for list="{{ atlasNodes }}" as="an" hint-placeholder-count="8">
+        <div style="position:absolute;left:{{ an.x }}px;top:{{ an.labelY }}px;transform:translate(-50%,0);pointer-events:none;font:500 9px/1 'JetBrains Mono',monospace;color:#8a86a8;white-space:nowrap">{{ an.label }}</div>
+      </sc-for>
 
       <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="9">
         <button type="button" onClick="{{ n.onClick }}" onMouseEnter="{{ n.onEnter }}" onMouseLeave="{{ n.onLeave }}" aria-label="{{ n.aria }}" style="position:absolute;left:{{ n.left }}px;top:{{ n.top }}px;transform:translate(-50%,-50%);background:none;border:0;padding:0;cursor:pointer;display:flex;flex-direction:{{ n.dir }};align-items:center;gap:9px;opacity:{{ n.opacity }};transition:opacity .5s ease;z-index:{{ n.z }}">
@@ -166,7 +183,13 @@ button{font:inherit}
       </sc-for>
 
       <sc-if value="{{ tip }}" hint-placeholder-val="{{ false }}">
-        <div style="position:absolute;left:{{ tipLeft }}px;top:{{ tipTop }}px;transform:translate(-50%,0);width:250px;padding:12px 14px;border-radius:12px;background:rgba(12,9,26,.94);border:1px solid rgba(160,140,230,.28);box-shadow:0 22px 60px rgba(0,0,0,.7);backdrop-filter:blur(10px);pointer-events:none;z-index:30;animation:rise .22s ease both">
+        <!-- transform-origin:50% 0% passt zum translate(-50%,0) darunter (Mitte
+             oben = Ankerpunkt): scale({{ tipScale }}) schrumpft/waechst damit
+             um genau den Punkt, der ohnehin schon an tipLeft/tipTop verankert
+             ist -- ausserhalb des Atlas-Hovers ist tipScale 1 (Neutralelement,
+             siehe renderVals), das bestehende Planeten-Hover-Verhalten bleibt
+             also unveraendert (Fix-Runde 3). -->
+        <div style="position:absolute;left:{{ tipLeft }}px;top:{{ tipTop }}px;transform-origin:50% 0%;transform:translate(-50%,0) scale({{ tipScale }});width:250px;padding:12px 14px;border-radius:12px;background:rgba(12,9,26,.94);border:1px solid rgba(160,140,230,.28);box-shadow:0 22px 60px rgba(0,0,0,.7);backdrop-filter:blur(10px);pointer-events:none;z-index:30;animation:rise .22s ease both">
           <div style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:{{ tipAccent }};margin-bottom:7px">{{ tipCluster }}</div>
           <div style="font:400 12.5px/1.5 'Space Grotesk',sans-serif;color:#c9c5e8;text-wrap:pretty">{{ tipText }}</div>
         </div>
@@ -759,19 +782,6 @@ class Component extends DCLogic {
     const atlasBoost = this.atlasLevelEff() > 1 && this._atlasHost ? 1.35 : 1;
     return { baseScale, atlasBoost, scale: baseScale * atlasBoost };
   }
-  // Ob die Buehne so schmal ist, dass die Fix-Runde-2-Rahmung (freie Flaeche
-  // neben dem Projektfenster) keinen sinnvollen Platz mehr findet. Das
-  // Fenster hat eine feste Mindestbreite von 320px (siehe panelWidth()); bei
-  // z.B. 375px waere die freie Flaeche nur 55px breit, ihre Mitte laege
-  // 27.5px vom Rand entfernt — Host und Ringe wuerden dorthin gequetscht
-  // statt sichtbar zu bleiben. Deshalb bleibt unterhalb von NARROW_VIEWPORT
-  // (dieselbe Schwelle wie in atlas-layout.js) das in Fix-Runde 1 bereits
-  // verifizierte Verhalten aktiv (Host bleibt ortsfest stehen), statt eine
-  // dort ungetestete Formel zu erzwingen. layout() (Ring-Obergrenze) und
-  // stageTransform() (Kamera) fragen beide diese eine Methode.
-  isNarrowAtlas() {
-    return this.state.w < (this._atlasLayout ? this._atlasLayout.NARROW_VIEWPORT : 760);
-  }
   stageTransform() {
     const D = this.state.D, act = this.state.active;
     const shift = act && act !== D?.TERM_ID ? -Math.min(230, this.state.w * 0.16) : 0;
@@ -802,22 +812,58 @@ class Component extends DCLogic {
     // war ohnehin nur eine grobe Naeherung fuer "Platz fuers Fenster lassen",
     // die hier direkt und exakt in Tx steckt. Ohne Atlas-Host (atlasBoost===1)
     // bleibt alles exakt wie vor Runde 1: translate(shift, 0).
-    const { baseScale, atlasBoost, scale } = this.stageScale();
+    //
+    // Fix-Runde 3: der eigene Schmalviewport-Sonderfall aus Runde 2 (Host
+    // unterhalb NARROW_VIEWPORT ortsfest halten statt zu rahmen) ist raus.
+    // Seit maxLevelFor() unter NARROW_VIEWPORT nur noch Stufe 1 erlaubt (siehe
+    // atlas-layout.js) und der Regler dort per atlasAvailable gar nicht mehr
+    // erscheint, kann atlasBoost dort nie mehr != 1 werden — der Zweig war
+    // unerreichbar toter Code mit einer Begruendung, die nicht mehr gilt.
+    const { atlasBoost, scale } = this.stageScale();
     let tx = shift, ty = 0;
     if (atlasBoost !== 1) {
       const cx = this.state.w / 2, cy = this.state.h / 2;
-      if (this.isNarrowAtlas()) {
-        // Runde 1: Host ortsfest halten (E-Ausgleich um die feste Buehnenmitte).
-        tx = (1 - atlasBoost) * baseScale * (this._atlasHost.x - cx);
-        ty = (1 - atlasBoost) * baseScale * (this._atlasHost.y - cy);
-      } else {
-        const freeWidth = this.state.w - this.panelWidth(false).px;
-        const freeCenterX = freeWidth / 2, freeCenterY = this.state.h / 2;
-        tx = freeCenterX - cx - scale * (this._atlasHost.x - cx);
-        ty = freeCenterY - cy - scale * (this._atlasHost.y - cy);
-      }
+      const freeWidth = this.state.w - this.panelWidth(false).px;
+      const freeCenterX = freeWidth / 2, freeCenterY = this.state.h / 2;
+      tx = freeCenterX - cx - scale * (this._atlasHost.x - cx);
+      ty = freeCenterY - cy - scale * (this._atlasHost.y - cy);
     }
     return `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${scale.toFixed(3)})`;
+  }
+  // Position + Gegenskalierung fuer den Hinweiskasten im Atlas-Modus
+  // (Fix-Runde 3). Der Kasten liegt weiterhin im selben Element wie beim
+  // normalen Planeten-Hover, innerhalb der skalierten Buehne -- soll aber in
+  // natuerlicher Bildschirmgroesse erscheinen (bei Skalierung 1.69 waere er
+  // sonst ueberdimensioniert und liefe unters Panel). Da left/top dieses Divs
+  // durch denselben Kamera-Transform laufen wie alles andere in der Buehne,
+  // wird der gewuenschte BILDSCHIRM-Ankerpunkt zuerst gegen die freie Flaeche
+  // geklemmt (dieselbe Quelle wie stageTransform()/layout(), panelWidth(),
+  // nicht neu berechnet) und dann durch Umkehrung des Kamera-Transforms
+  // zurueck in Buehneneinheiten uebersetzt. Weil stageTransform() den Host
+  // exakt auf freeCenterX/Y abbildet (siehe dort), kuerzen sich Ursprung c
+  // und Translate T in der Differenz zum Host heraus -- es bleibt eine simple
+  // Skalierung um den Host als Bezugspunkt.
+  atlasTipPos(hoverX, hoverY) {
+    const host = this._atlasHost;
+    const { scale } = this.stageScale();
+    const freeWidth = this.state.w - this.panelWidth(false).px;
+    const freeCenterX = freeWidth / 2, freeCenterY = this.state.h / 2;
+    const rawX = freeCenterX + scale * (hoverX - host.x);
+    // +58 in Bildschirm-px (nicht Buehneneinheiten!), damit die Luecke
+    // zwischen Modulpunkt und Kasten unabhaengig vom Zoom/Atlas-Boost gleich
+    // gross bleibt -- derselbe Abstand wie beim Planeten-Hover (tipTop unten),
+    // nur bewusst VOR statt nach der Skalierung angewendet.
+    const rawY = freeCenterY + scale * (hoverY - host.y) + 58;
+    // Boxmasse in natuerlichen Bildschirm-px: 250px Breite (width:250px im
+    // Template) + 16px Rand, geschaetzte Boxhoehe (Kicker + Fliesstext) + Rand.
+    const HALF_W = 125 + 16, HALF_H = 45 + 16;
+    const clampedX = Math.max(HALF_W, Math.min(freeWidth - HALF_W, rawX));
+    const clampedY = Math.max(HALF_H, Math.min(this.state.h - HALF_H, rawY));
+    return {
+      left: host.x + (clampedX - freeCenterX) / scale,
+      top: host.y + (clampedY - freeCenterY) / scale,
+      counterScale: 1 / scale
+    };
   }
   zoomIn = () => { this._zoom = Math.min(1.8, Math.round((this._zoom + 0.04) * 100) / 100); this.applyZoom(); };
   zoomOut = () => { this._zoom = Math.max(0.6, Math.round((this._zoom - 0.04) * 100) / 100); this.applyZoom(); };
@@ -1034,14 +1080,12 @@ class Component extends DCLogic {
         // unterm <aside>. maxRadius ist in Buehneneinheiten, deshalb durch
         // dieselbe Skalierung geteilt, die stageTransform() fuers Framing
         // benutzt (this.stageScale()), sonst koennten Ring-Clamp und Kamera
-        // auseinanderlaufen. isNarrowAtlas() haelt beide Stellen an derselben
-        // Schwelle synchron (siehe Kommentar dort fuer die Begruendung, warum
-        // die Grenze unterhalb davon nicht greift).
-        let maxRadius;
-        if (!this.isNarrowAtlas()) {
-          const freeWidth = w - this.panelWidth(false).px;
-          maxRadius = (freeWidth / 2 - 24) / this.stageScale().scale;
-        }
+        // auseinanderlaufen.
+        // Fix-Runde 3: der Schmalviewport-Sonderfall (kein maxRadius unterhalb
+        // NARROW_VIEWPORT) ist raus — seit maxLevelFor() dort nur noch Stufe 1
+        // erlaubt, wird dieser Zweig nie mehr mit einem Atlas-Host erreicht.
+        const freeWidth = w - this.panelWidth(false).px;
+        const maxRadius = (freeWidth / 2 - 24) / this.stageScale().scale;
         const out = this._atlasLayout.computeAtlasLayout(this.state.atlas, {
           level: this.atlasLevelEff(), cx: host.x, cy: host.y, w, h, maxRadius
         });
@@ -1178,6 +1222,10 @@ class Component extends DCLogic {
     const atlasHoverLayer = this.state.atlasHover
       ? (atlasRings ?? []).find((r) => r.layerId === this.state.atlasHover.layerId)
       : null;
+    // Bildschirmgerechte Position + Gegenskalierung, Fix-Runde 3 (siehe
+    // atlasTipPos()). null ausserhalb des Atlas-Hovers -- dort bleibt tipLeft/
+    // tipTop/tipScale exakt das bisherige, unveraenderte Verhalten.
+    const atlasTip = this.state.atlasHover ? this.atlasTipPos(this.state.atlasHover.x, this.state.atlasHover.y) : null;
     const demoUrl = isChat ? null : activeP ? activeP.demoUrl : null;
     const commit = activeP && this.state.gh[activeP.id] ? relDe(this.state.gh[activeP.id]) : null;
     const accent = isResume ? "#b48cf5" : activeP ? D.CLUSTERS[activeP.cluster].color : "#4fd6c4";
@@ -1203,12 +1251,16 @@ class Component extends DCLogic {
       // offenem Fenster sieht man dessen Inhalt bereits). Ein gesetzter
       // atlasHover zeigt den Kasten deshalb unabhaengig von active.
       tip: (!!hoverP && !active) || !!this.state.atlasHover,
-      tipLeft: this.state.atlasHover
-        ? Math.round(Math.max(140, Math.min(w - 140, this.state.atlasHover.x)))
+      tipLeft: atlasTip
+        ? Math.round(atlasTip.left)
         : hoverNode ? Math.round(Math.max(140, Math.min(w - 140, hoverNode.x))) : 0,
-      tipTop: this.state.atlasHover
-        ? Math.round(this.state.atlasHover.y + 58)
+      tipTop: atlasTip
+        ? Math.round(atlasTip.top)
         : hoverNode ? Math.round(hoverNode.y + 58) : 0,
+      // Gegenskalierung, Fix-Runde 3: 1 ausserhalb des Atlas-Hovers, macht
+      // scale({{ tipScale }}) im Template zu einem Neutralelement -- das
+      // bestehende Planeten-Hover-Verhalten bleibt dadurch unangetastet.
+      tipScale: atlasTip ? atlasTip.counterScale : 1,
       tipText: this.state.atlasHover ? this.state.atlasHover.text : (hoverP ? hoverP.summary : ""),
       tipCluster: this.state.atlasHover ? (atlasHoverLayer ? atlasHoverLayer.label : "") : (hoverP ? D.CLUSTERS[hoverP.cluster].label : ""),
       tipAccent: this.state.atlasHover ? "#b48cf5" : (hoverP ? D.CLUSTERS[hoverP.cluster].color : "#b48cf5"),
@@ -1243,8 +1295,13 @@ class Component extends DCLogic {
       resumePdf: D.RESUME.pdfUrl, resumeLinkedIn: D.RESUME.linkedinUrl,
       activeTitle: isResume ? D.RESUME.name : activeP ? activeP.title : "",
       activeSummary: isResume ? D.RESUME.intro : activeP ? activeP.summary : "",
+      // Fix-Runde 3: unter NARROW_VIEWPORT liefert atlasMaxLevel() nur noch 1
+      // (siehe atlas-layout.js) -- ein Regler, der nachweislich nichts
+      // bewirkt (keine Stufe ausser der aktuellen erreichbar), waere unehrlich.
+      // Deshalb erscheint er dort gar nicht erst, statt als wirkungsloser
+      // Ein-Stufen-Regler.
       atlasAvailable: Boolean(
-        this.state.atlasIndex && activeP && this._atlas?.hasAtlas(this.state.atlasIndex, activeP.id)
+        this.atlasMaxLevel() > 1 && this.state.atlasIndex && activeP && this._atlas?.hasAtlas(this.state.atlasIndex, activeP.id)
       ),
       atlasLevel: this.atlasLevelEff(),
       atlasMaxLevel: this.atlasMaxLevel(),
