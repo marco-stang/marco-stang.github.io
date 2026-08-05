@@ -17,11 +17,15 @@ test("weist alles zurueck, was den Vertrag verletzt", () => {
   assert.equal(isValidAtlas(null), false);
   assert.equal(isValidAtlas({}), false);
   assert.equal(isValidAtlas("string"), false);
+  assert.equal(isValidAtlas(42), false);
+  assert.equal(isValidAtlas([]), false);
   assert.equal(isValidAtlas({ ...GUELTIG, layers: "keine liste" }), false);
   assert.equal(isValidAtlas({ ...GUELTIG, modules: undefined }), false);
   assert.equal(isValidAtlas({ ...GUELTIG, id: 42 }), false);
   assert.equal(isValidAtlas({ ...GUELTIG, layers: [{ label: "ohne id" }] }), false);
   assert.equal(isValidAtlas({ ...GUELTIG, modules: [{ id: "x" }] }), false);
+  assert.equal(isValidAtlas({ ...GUELTIG, layers: [null] }), false);
+  assert.equal(isValidAtlas({ ...GUELTIG, modules: [null] }), false);
 });
 
 test("hasAtlas liest den Index defensiv", () => {
@@ -63,4 +67,39 @@ test("loadAtlas cacht pro Projekt und ruft nur einmal ab", async () => {
   assert.equal(calls, 1);
   assert.equal(a.id, "sql-agent");
   assert.equal(b, a);
+});
+
+test("loadAtlas dedupliziert ueberlappende Abrufe", async () => {
+  __resetAtlasCache();
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    // Verzoegern, damit beide Aufrufe wirklich ueberlappen
+    await new Promise(resolve => setTimeout(resolve, 10));
+    return { ok: true, json: async () => GUELTIG };
+  };
+  const [a, b] = await Promise.all([
+    loadAtlas("sql-agent", "https://example.test/", fetchImpl),
+    loadAtlas("sql-agent", "https://example.test/", fetchImpl)
+  ]);
+  assert.equal(calls, 1);
+  assert.equal(a.id, "sql-agent");
+  assert.equal(b, a);
+});
+
+test("loadAtlas vergiftet Cache nicht, wenn der erste Abruf fehlschlaegt", async () => {
+  __resetAtlasCache();
+  let calls = 0;
+  const failingFetch = async () => { calls++; throw new Error("offline"); };
+  const successFetch = async () => { calls++; return { ok: true, json: async () => GUELTIG }; };
+
+  // Erster Abruf schlaegt fehl
+  const a = await loadAtlas("sql-agent", "https://example.test/", failingFetch);
+  assert.equal(a, null);
+  assert.equal(calls, 1);
+
+  // Zweiter Abruf mit funktionierendem Fetch sollte erneut versuchen
+  const b = await loadAtlas("sql-agent", "https://example.test/", successFetch);
+  assert.equal(b.id, "sql-agent");
+  assert.equal(calls, 2);
 });
