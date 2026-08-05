@@ -313,6 +313,19 @@ button{font:inherit}
               </div>
             </sc-if>
 
+            <sc-if value="{{ atlasAvailable }}" hint-placeholder-val="{{ true }}">
+              <div style="margin:0 0 22px;padding:14px 16px;border-radius:13px;background:rgba(255,255,255,.035);border:1px solid rgba(160,140,230,.16)">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px">
+                  <span style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#8a86a8">Tiefe</span>
+                  <span style="font:500 11.5px/1 'Space Grotesk',sans-serif;color:{{ activeAccent }}">{{ atlasLevelLabel }}</span>
+                </div>
+                <input type="range" min="1" max="{{ atlasMaxLevel }}" step="1" value="{{ atlasLevel }}"
+                       onInput="{{ setAtlasLevelFromInput }}" aria-label="Detailtiefe der Architekturansicht"
+                       style="width:100%;accent-color:#b48cf5;cursor:pointer">
+                <div style="margin-top:8px;font:400 10px/1.4 'JetBrains Mono',monospace;color:#6f6a92">{{ atlasHint }}</div>
+              </div>
+            </sc-if>
+
             <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:26px">
               <sc-for list="{{ activeTags }}" as="t" hint-placeholder-count="5">
                 <span style="padding:5px 10px;border-radius:6px;background:rgba(255,255,255,.04);border:1px solid rgba(160,140,230,.14);font:400 11px/1.4 'JetBrains Mono',monospace;color:#a9a3d2">{{ t }}</span>
@@ -408,7 +421,9 @@ class Component extends DCLogic {
     D: null, booting: true, bootStep: 0, bootFade: false, active: null, hover: null,
     variant: "orbit", w: 1280, h: 700, clock: "", zoom: 1, tech: false,
     hist: false, tour: -1, term: [{ text: "MARCO.OS Terminal. Tippe 'help' und du siehst alle Befehle.", kind: "muted" }], gh: {},
-    tipIndex: 0, visitors: null, chatStalled: false
+    tipIndex: 0, visitors: null, chatStalled: false,
+    // Code Atlas: Stufe 1 = heutige Ansicht, 2 = Layer-Ringe, 3 = Modulknoten.
+    atlasLevel: 1, atlasIndex: null, atlas: null, atlasError: false, atlasHover: null
   };
 
   componentDidMount() {
@@ -429,6 +444,18 @@ class Component extends DCLogic {
       a.initAnalytics();
       a.fetchVisitorCount().then((v) => { if (v) this.setState({ visitors: v }); });
     }).catch(() => {});
+    // Nur der Index (wenige hundert Byte) kommt beim Start mit; er entscheidet
+    // lediglich, ob der Regler ueberhaupt erscheint. Die Atlas-Dateien selbst
+    // werden erst beim Wechsel auf Stufe 2 geholt. atlas-layout.js kommt in
+    // derselben Kette und wird VOR atlasIndex gesetzt, damit garantiert ist:
+    // sobald atlasIndex im State steht, existiert auch this._atlasLayout.
+    import(modUrl("atlas-data.js")).then((m) => {
+      this._atlas = m;
+      return import(modUrl("atlas-layout.js"));
+    }).then((layout) => {
+      this._atlasLayout = layout;
+      return this._atlas.loadAtlasIndex(new URL("./", document.baseURI).href);
+    }).then((index) => this.setState({ atlasIndex: index })).catch(() => {});
     this._onKey = (e) => {
       if (this.state.booting) { this.skip(); return; }
       if (e.key === "Escape") { this.stopTour(); this.close(); return; }
@@ -703,8 +730,22 @@ class Component extends DCLogic {
     const h = id ? (map[id] || id) : "";
     try { history.replaceState(null, "", h ? `#${h}` : window.location.pathname + window.location.search); } catch (e) {}
   }
+  setAtlasLevel = (level) => {
+    const id = this.state.active;
+    if (level <= 1) { this.setState({ atlasLevel: 1, atlasError: false }); return; }
+    if (!id || !this._atlas) return;
+    // Sofort schalten: der Regler darf nicht auf das Netz warten. Die Szene
+    // rendert Stufe 2 leer, bis die Daten da sind — das ist ein Sekundenbruchteil
+    // aus dem Cache und faellt bei Fehlschlag auf Stufe 1 zurueck.
+    this.setState({ atlasLevel: level, atlasError: false });
+    this._atlas.loadAtlas(id, new URL("./", document.baseURI).href).then((atlas) => {
+      if (this.state.active !== id) return;   // inzwischen anderes Projekt offen
+      if (!atlas) { this.setState({ atlasLevel: 1, atlas: null, atlasError: true }); return; }
+      this.setState({ atlas });
+    });
+  };
   open = (id) => {
-    this.setState({ active: id, tech: false, hist: false });
+    this.setState({ active: id, tech: false, hist: false, atlasLevel: 1, atlas: null, atlasError: false });
     this.fetchActivity(id);
     this.syncHash(id);
     clearTimeout(this._stallTimer);
@@ -743,7 +784,7 @@ class Component extends DCLogic {
     this.armChatLoading();
     if (this._chatFrame) this._chatFrame.src = this._chatFrame.src;
   };
-  close = () => { this.setState({ active: null }); this.syncHash(null); };
+  close = () => { this.setState({ active: null, atlasLevel: 1, atlas: null, atlasError: false }); this.syncHash(null); };
 
 
   startTour = () => { this.setState({ tour: -1 }); this.goTour(0); };
@@ -1027,6 +1068,16 @@ class Component extends DCLogic {
       resumePdf: D.RESUME.pdfUrl, resumeLinkedIn: D.RESUME.linkedinUrl,
       activeTitle: isResume ? D.RESUME.name : activeP ? activeP.title : "",
       activeSummary: isResume ? D.RESUME.intro : activeP ? activeP.summary : "",
+      atlasAvailable: Boolean(
+        this.state.atlasIndex && activeP && this._atlas?.hasAtlas(this.state.atlasIndex, activeP.id)
+      ),
+      atlasLevel: this.state.atlasLevel,
+      atlasMaxLevel: this._atlasLayout ? this._atlasLayout.maxLevelFor(this.state.w) : 1,
+      atlasLevelLabel: ["", "Projekt", "Struktur", "Code"][this.state.atlasLevel] || "Projekt",
+      atlasHint: this.state.atlasError
+        ? "Architekturdaten gerade nicht verfügbar"
+        : "Graph-Extraktion: Understand-Anything (MIT) · Reduktion und Darstellung: eigene Pipeline",
+      setAtlasLevelFromInput: (e) => this.setAtlasLevel(Number(e.target.value)),
       activeDescription: activeP ? activeP.description : "",
       activeCluster: isResume ? "Lebenslauf" : activeP ? D.CLUSTERS[activeP.cluster].label : "",
       activeStatus: isResume ? "PDF verfügbar" : activeP ? (activeP.status === "live" ? "● live deployed" : "○ kein Demo") : "",
