@@ -231,22 +231,15 @@ everywhere.
 
 ## Code Atlas (data/atlas/)
 
-Reinzoomen in einen Planeten zeigt die Architektur des jeweiligen Repos:
-Stufe 1 Projekt, Stufe 2 Layer-Ringe, Stufe 3 Modulknoten. Der Regler sitzt
-im Projektfenster und erscheint nur für Projekte, die in
-`data/atlas/index.json` stehen — **und nur ab 1000px Viewportbreite**
-(`ATLAS_MIN_VIEWPORT` in `assets/js/atlas-layout.js`). Darunter deckt das
-Projektfenster fast die gesamte Breite ab (gemessen bei 375px: 55px bleiben
-frei), der Atlas läge komplett dahinter; und zwischen 760 und 1000px wird er
-zwar sichtbar, aber unlesbar (gemessen bei 780px: sechs Ringe auf 37
-Einheiten Spanne, 24 Modulpunkte mit 10px engstem Abstand bei 15px hohen
-Labels). `maxLevelFor()` liefert dort deshalb 1 und der Regler wird gar nicht
-erst gerendert — statt als ein Regler zu erscheinen, der nachweislich nichts
-bewirkt oder nur einen Klumpen erzeugt.
-
-**Nicht verwechseln:** die `@media (max-width: 760px)`-Regel fürs
-Mobile-Chrome (Falle 4) ist eine andere Sache und bleibt bei 760, ebenso die
-Schmalviewport-Schwelle der Ring-Geometrie.
+Ein Projektfenster mit hinterlegtem Atlas zeigt einen Toggle
+("▸ Architektur anzeigen"). Aufgeklappt listet er die Layer des Repos als
+eigene Akkordeon-Abschnitte (`▸ <Name> (<Anzahl>)`); ein Klick auf einen Layer
+zeigt dessen Module als Karten (Name, gekürzte Summary, ggf. "nutzt: …").
+Kein Canvas, keine Kamerafahrt, kein Viewport-Gate mehr — die Liste
+funktioniert bei jeder Breite. Ursprünglich (Pilot-Version) war das eine
+Ring-Geometrie mit Kamerafahrt und einem dreistufigen Regler; das erwies sich
+nach dem Pilot als zu unübersichtlich und wurde durch dieses Redesign
+ersetzt (siehe `docs/superpowers/specs/2026-08-06-code-atlas-redesign-design.md`).
 
 Rohdaten kommen von Understand-Anything (Egonex-AI, MIT) — **nur als
 Datenquelle, nie als UI**: ihr Viewer ist ein Node-Prozess und auf GitHub
@@ -272,9 +265,8 @@ Repos und sind dort gitignored — nur die reduzierte Fassung wird committed.
 | --- | --- |
 | `tools/gen-atlas.mjs` | CLI-Einstieg: liest `.ua/knowledge-graph.json`, ruft Normalisierung und Reduktion auf, schreibt `data/atlas/<id>.json` und `data/atlas/index.json` |
 | `tools/atlas-normalize.mjs` | Adapter aufs fremde Rohschema — die **einzige** Stelle, die bricht, wenn Understand-Anything sein Format ändert |
-| `tools/atlas-reduce.mjs` | Kappung (6 Layer, 8 Module/Layer), deterministisch |
-| `tools/atlas-overrides/<id>.json` | optional: `pin`/`hide`/`labels` (u.a. deutsche Layer-Namen) |
-| `assets/js/atlas-layout.js` | reine Layout-Funktion, DOM-frei, unit-getestet |
+| `tools/atlas-reduce.mjs` | Kappung (6 Layer, 8 Module/Layer) plus Summary-Kürzung auf den ersten Satz (`truncateSummary`, `MAX_SUMMARY_CHARS = 140`), deterministisch |
+| `tools/atlas-overrides/<id>.json` | optional: `pin`/`hide`/`labels` (u.a. deutsche Layer-Namen), `highlights` (redaktioneller Teaser, 1-3 Sätze, vor dem ersten Layer-Klick sichtbar) |
 | `assets/js/atlas-data.js` | lazy Lader, Fehler immer still → `null` |
 
 Das beobachtete Rohschema steht in
