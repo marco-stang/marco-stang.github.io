@@ -135,15 +135,35 @@ button{font:inherit}
         <sc-for list="{{ leaders }}" as="ld" hint-placeholder-count="4">
           <line x1="{{ ld.x1 }}" y1="{{ ld.y1 }}" x2="{{ ld.x2 }}" y2="{{ ld.y2 }}" stroke="{{ ld.color }}" stroke-width="1" stroke-linecap="round" opacity="0.75"></line>
         </sc-for>
+        <!-- pointer-events:none auf Ringen und Kanten (Abschlusspruefung 1a):
+             beide sind reine Grafik ohne Hover und ohne Klickziel. Ohne die
+             Regel trifft ein Klick genau auf die gestrichelte Linie (SVG
+             zeichnet nur das Gemalte, aber der Strich IST gemalt) den
+             Szenen-Klickhandler weiter unten -- und der schliesst alles, was
+             kein <button>/<a> ist. Ergebnis waere: Klick auf einen Layer-Ring
+             reisst das Projektfenster samt Atlas zu. -->
         <sc-for list="{{ atlasRings }}" as="ar" hint-placeholder-count="3">
           <ellipse cx="{{ ar.cx }}" cy="{{ ar.cy }}" rx="{{ ar.rx }}" ry="{{ ar.ry }}" fill="none"
-                   stroke="#b48cf5" stroke-width="1" stroke-dasharray="3 6" opacity=".34"></ellipse>
+                   stroke="#b48cf5" stroke-width="1" stroke-dasharray="3 6" opacity=".34"
+                   pointer-events="none"></ellipse>
         </sc-for>
         <sc-for list="{{ atlasEdges }}" as="ae" hint-placeholder-count="4">
-          <path d="{{ ae.d }}" fill="none" stroke="#b48cf5" stroke-width="1" opacity=".22"></path>
+          <path d="{{ ae.d }}" fill="none" stroke="#b48cf5" stroke-width="1" opacity=".22"
+                pointer-events="none"></path>
         </sc-for>
+        <!-- Modulknoten brauchen ihre Zeigerereignisse (Hover zeigt die
+             summary), duerfen den Klick aber NICHT ans Schliessen
+             durchreichen -- deshalb das data-atlas-node, auf das der
+             Szenen-Klickhandler prueft.
+             cursor:default, NICHT pointer: ein Modulknoten hat keine
+             Klickaktion, er zeigt seine Beschreibung beim Hovern. Der
+             Zeigefinger versprach bisher eine Aktion und lieferte das
+             Zerreissen der Ansicht. Wer ihn "aus Symmetrie zu den Planeten"
+             zurueckstellt, baut genau dieses falsche Versprechen wieder ein.
+             Der Sammelknoten "+N weitere" traegt aus demselben Grund schon
+             immer default. -->
         <sc-for list="{{ atlasNodes }}" as="an" hint-placeholder-count="8">
-          <g style="cursor:{{ an.cursor }}"
+          <g data-atlas-node="1" style="cursor:default"
              onMouseEnter="{{ an.onEnter }}" onMouseLeave="{{ an.onLeave }}">
             <circle cx="{{ an.x }}" cy="{{ an.y }}" r="{{ an.radius }}"
                     fill="{{ an.fill }}" stroke="#b48cf5" stroke-width="1"
@@ -167,6 +187,39 @@ button{font:inherit}
            Atlas-Skalierung (~1.69x) zu ~15px auf dem Schirm, lesbar.
            pointer-events:none ist Pflicht: sonst faengt das Label-Div den
            Hover vom Modulpunkt darunter ab, bevor die Maus ihn erreicht. -->
+      <!-- Beschriftung der Layer-Ringe (Abschlusspruefung 1b). Bis hierher
+           war Stufe "Struktur" wortlos: sechs gestrichelte Ellipsen ohne
+           einen einzigen Text, obwohl atlas-layout.js label UND count
+           laengst durchreicht.
+           Auch hier KEIN SVG-<text>, aus exakt demselben Grund wie bei den
+           Modul-Labels darunter (Falle 5 in CLAUDE.md): eine
+           {{ }}-Interpolation wird als HTML-<span class="sc-interp">
+           gerendert, und ein HTML-<span> im SVG-<text> zeichnet nichts.
+           pointer-events:none ist Pflicht, sonst faengt das Ring-Label den
+           Hover der Modulknoten ab, die genau auf diesem Ring sitzen.
+
+           Sitz: mittig AUF dem Scheitelpunkt des eigenen Rings. Damit ist die
+           Zuordnung Label -> Ring eindeutig; ein Label neben der Linie waere
+           bei sechs Ringen nicht mehr sicher dem richtigen zuzuordnen. Der
+           text-shadow ist der Ersatz fuer einen Kasten: er stanzt die Schrift
+           aus der gestrichelten Linie heraus, ohne den Ring zu verdecken.
+           Horizontal auf der Ringmitte -- und genau die rahmt
+           stageTransform() in die Mitte der freien Flaeche neben dem
+           Projektfenster (freeArea()), das Label kann also nicht darunter
+           laufen.
+
+           Schriftgroesse 7.5px ist gerechnet, nicht geraten: die Ringe
+           stehen im engsten erlaubten Fall (1000px Viewport, sechs Layer)
+           10.3 Buehneneinheiten auseinander, bei Atlas-Skalierung 1.6875
+           also 17px auf dem Schirm. 7.5px werden dort zu 12.7px -- die
+           Beschriftungen benachbarter Ringe beruehren sich damit nicht. Bei
+           1280px sind es 30px Abstand und die Schrift steht frei. Sie ist
+           bewusst kleiner als die Modul-Labels (9px): das ist die
+           Platzgrenze, nicht die Wichtigkeit. -->
+      <sc-for list="{{ atlasRingLabels }}" as="al" hint-placeholder-count="3">
+        <div style="position:absolute;left:{{ al.x }}px;top:{{ al.y }}px;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap;font:600 7.5px/1.1 'JetBrains Mono',monospace;text-align:center;text-shadow:0 0 4px #06050e,0 0 4px #06050e,0 0 8px #06050e"><span style="color:#c9b6f5">{{ al.label }}</span><span style="color:#8a86a8"> · {{ al.meta }}</span></div>
+      </sc-for>
+
       <sc-for list="{{ atlasNodes }}" as="an" hint-placeholder-count="8">
         <div style="position:absolute;left:{{ an.x }}px;top:{{ an.labelY }}px;transform:translate(-50%,0);pointer-events:none;font:500 9px/1 'JetBrains Mono',monospace;color:#8a86a8;white-space:nowrap">{{ an.label }}</div>
       </sc-for>
@@ -616,7 +669,7 @@ class Component extends DCLogic {
     // atlasHover mit zuruecksetzen (Fix-Runde 5, Critical): eine tatsaechliche
     // Groessenaenderung aendert Panelbreite, Kamera-Rahmung und Ring-Radius
     // (siehe freeArea()) -- ein gehoverter Modulknoten kann dabei verschwinden
-    // (z.B. faellt w unter NARROW_VIEWPORT, wo _atlasHost null wird) oder an
+    // (z.B. faellt w unter ATLAS_MIN_VIEWPORT, wo _atlasHost null wird) oder an
     // eine andere Stelle wandern, ohne dass ein mouseleave feuert. Bewusst
     // NUR im if-Zweig, nicht bei jedem Aufruf: measure() laeuft auch
     // periodisch ohne tatsaechliche Groessenaenderung.
@@ -761,8 +814,15 @@ class Component extends DCLogic {
     // scene.js der Legacy-Seite. Knoten und Links sind <button>/<a> im
     // Inneren, die duerfen nicht mitschliessen, sonst waere jeder Klick auf
     // einen Planeten sofort wieder ein Schliessen.
+    // Abschlusspruefung 1a: die Atlas-Modulknoten sind <g><circle>, also
+    // WEDER button noch a -- ein Klick auf einen Modulpunkt hat bislang das
+    // ganze Projektfenster geschlossen und damit Regler und Atlas mitgerissen.
+    // "Kein Klickziel" heisst hier ausdruecklich NICHT "Hintergrund".
+    // Ringe und Kanten sind ueber pointer-events:none entschaerft (siehe
+    // oben im Template), die Modulknoten koennen das nicht, weil sie ihren
+    // Hover brauchen -- daher die Ausnahme hier.
     el.addEventListener("click", (e) => {
-      if (e.target.closest("button, a")) return;
+      if (e.target.closest("button, a, [data-atlas-node]")) return;
       if (!this.state.active) return;
       this.stopTour();
       this.close();
@@ -861,8 +921,8 @@ class Component extends DCLogic {
     // bleibt alles exakt wie vor Runde 1: translate(shift, 0).
     //
     // Fix-Runde 3: der eigene Schmalviewport-Sonderfall aus Runde 2 (Host
-    // unterhalb NARROW_VIEWPORT ortsfest halten statt zu rahmen) ist raus.
-    // Seit maxLevelFor() unter NARROW_VIEWPORT nur noch Stufe 1 erlaubt (siehe
+    // unterhalb ATLAS_MIN_VIEWPORT ortsfest halten statt zu rahmen) ist raus.
+    // Seit maxLevelFor() unter ATLAS_MIN_VIEWPORT nur noch Stufe 1 erlaubt (siehe
     // atlas-layout.js) und der Regler dort per atlasAvailable gar nicht mehr
     // erscheint, kann atlasBoost dort nie mehr != 1 werden — der Zweig war
     // unerreichbar toter Code mit einer Begruendung, die nicht mehr gilt.
@@ -937,7 +997,7 @@ class Component extends DCLogic {
     // atlasHover haengt dann an einem Modul, das gar nicht mehr existiert,
     // und blieb bislang bis zur naechsten Maus-Bewegung so stehen (sichtbar:
     // der Kasten beschreibt ein nicht mehr gezeichnetes Modul; im schlimmsten
-    // Fall reisst ein spaeter folgender Resize unter NARROW_VIEWPORT dann die
+    // Fall reisst ein spaeter folgender Resize unter ATLAS_MIN_VIEWPORT dann die
     // Seite weg, siehe atlasTipPos()).
     if (level <= 1) { this.setState({ atlasLevel: 1, atlasError: false, atlasHover: null }); return; }
     if (!id || !this._atlas) return;
@@ -1145,7 +1205,7 @@ class Component extends DCLogic {
         // benutzt (this.stageScale()), sonst koennten Ring-Clamp und Kamera
         // auseinanderlaufen.
         // Fix-Runde 3: der Schmalviewport-Sonderfall (kein maxRadius unterhalb
-        // NARROW_VIEWPORT) ist raus — seit maxLevelFor() dort nur noch Stufe 1
+        // ATLAS_MIN_VIEWPORT) ist raus — seit maxLevelFor() dort nur noch Stufe 1
         // erlaubt, wird dieser Zweig nie mehr mit einem Atlas-Host erreicht.
         // Fix-Runde 5: freeArea() statt eigener Inline-Formel, dieselbe Quelle
         // wie stageTransform() und atlasTipPos() (siehe dort).
@@ -1199,9 +1259,10 @@ class Component extends DCLogic {
       fill: n.more ? "transparent" : "#b48cf5",
       dash: n.more ? "2 3" : "none",
       labelY: n.y + 15,
-      // Der Sammelknoten "+N weitere" ist bewusst nicht interaktiv: er steht
-      // fuer weggekappte Module, zu denen es nichts anzuzeigen gibt.
-      cursor: n.more ? "default" : "pointer",
+      // Der Sammelknoten "+N weitere" ist bewusst gar nicht interaktiv: er
+      // steht fuer weggekappte Module, zu denen es nichts anzuzeigen gibt.
+      // Den Cursor setzt das Template fest auf default (siehe dort) -- kein
+      // Modulknoten hat eine Klickaktion, auch die echten nicht.
       // atlasHover ist ein Objekt (nicht nur der Text), weil der Hinweiskasten
       // Position UND Layer-Zugehoerigkeit braucht — hoverNode existiert im
       // Atlas-Modus nicht (das ist ein Planetenknoten), also muss der Modul-
@@ -1211,6 +1272,33 @@ class Component extends DCLogic {
       }),
       onLeave: n.more ? () => {} : () => this.setState({ atlasHover: null })
     }));
+    // Beschriftung der Layer-Ringe (Abschlusspruefung 1b). Kein neuer
+    // Datenweg: label und count kommen unveraendert aus atlasRings, die Zahl
+    // der tatsaechlich gezeichneten Module wird aus atlasNodes gezaehlt.
+    const atlasShownPerLayer = new Map();
+    for (const n of atlasNodes ?? []) {
+      // Der Sammelknoten "+N weitere" ist selbst kein gezeigtes Modul --
+      // ihn mitzuzaehlen wuerde die Kappung genau um eins schoenrechnen.
+      if (n.more) continue;
+      atlasShownPerLayer.set(n.layerId, (atlasShownPerLayer.get(n.layerId) ?? 0) + 1);
+    }
+    const atlasRingLabels = (atlasRings ?? []).map((r) => {
+      const count = Number(r.count) || 0;
+      const shown = atlasShownPerLayer.get(r.layerId) ?? 0;
+      // Singular/Plural im Deutschen: "1 Modul", sonst "N Module".
+      const menge = count === 1 ? "1 Modul" : `${count} Module`;
+      // Kappung ehrlich benennen -- aber nur, wenn ueberhaupt Modulpunkte
+      // gezeichnet sind. Auf Stufe 2 gibt es per Definition keine (das ist
+      // die Stufe der reinen Layer-Ringe); dort waere "7 Module, 0 gezeigt"
+      // kein ehrlicher Hinweis, sondern eine Falschaussage ueber die Stufe.
+      return {
+        // Scheitelpunkt des eigenen Rings (siehe Begruendung im Template).
+        x: Math.round(r.cx),
+        y: Math.round(r.cy - r.ry),
+        label: r.label,
+        meta: shown > 0 && count > shown ? `${menge}, ${shown} gezeigt` : menge
+      };
+    });
     const activeP = D.PROJECTS.find((p) => p.id === active) || (active === D.CHAT_ID ? D.PROJECTS.find((p) => p.moon) : null);
     const isResume = active === D.RESUME_ID, isChat = active === D.CHAT_ID, isTerminal = active === D.TERM_ID;
     const isProject = !!activeP && !isChat;
@@ -1312,6 +1400,7 @@ class Component extends DCLogic {
     return {
       ...base, nodes: nodeVals, edges, rings,
       atlasRings: atlasRings ?? [], atlasEdges: atlasEdges ?? [], atlasNodes: atlasNodeVals,
+      atlasRingLabels,
       leaders: this.state.leaders || [],
       sceneTransform: `position:absolute;inset:0;will-change:transform;transition:${
         reduceMotion ? "none" : "transform .42s cubic-bezier(.22,1,.3,1)"
@@ -1371,7 +1460,7 @@ class Component extends DCLogic {
       resumePdf: D.RESUME.pdfUrl, resumeLinkedIn: D.RESUME.linkedinUrl,
       activeTitle: isResume ? D.RESUME.name : activeP ? activeP.title : "",
       activeSummary: isResume ? D.RESUME.intro : activeP ? activeP.summary : "",
-      // Fix-Runde 3: unter NARROW_VIEWPORT liefert atlasMaxLevel() nur noch 1
+      // Fix-Runde 3: unter ATLAS_MIN_VIEWPORT liefert atlasMaxLevel() nur noch 1
       // (siehe atlas-layout.js) -- ein Regler, der nachweislich nichts
       // bewirkt (keine Stufe ausser der aktuellen erreichbar), waere unehrlich.
       // Deshalb erscheint er dort gar nicht erst, statt als wirkungsloser

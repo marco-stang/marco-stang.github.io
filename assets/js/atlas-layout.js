@@ -5,7 +5,17 @@
 // Repo schon einmal die ganze Szene zerlegt hat (negativer Radius unter
 // 400 px Breite). Sie muss testbar sein, bevor sie irgendetwas rendert.
 
-export const NARROW_VIEWPORT = 760;
+// Ab welcher Viewportbreite der Atlas ueberhaupt angeboten wird. Bewusst
+// getrennt von der Schmalviewport-Geometrie unten: das sind zwei Fragen
+// ("ab wann ist der Atlas sinnvoll" vs. "ab wann wird die Geometrie eng"),
+// die bis zur Abschlusspruefung in einer einzigen Konstante NARROW_VIEWPORT
+// steckten und darum nur gemeinsam verstellbar waren.
+export const ATLAS_MIN_VIEWPORT = 1000;
+
+// Schwelle der Schmalviewport-Geometrie -- dieselbe Zahl wie die
+// @media (max-width: 760px)-Regel fuers Mobile-Chrome in index.html
+// (Falle 4 in CLAUDE.md), aber eine andere Sache: die bleibt bei 760.
+const NARROW_GEOMETRY = 760;
 
 // Verhaeltnis Hoehe/Breite der Ringe — flacher als ein Kreis, damit sie
 // zum breiten Viewport passen und Module uebersichtlich sind.
@@ -25,7 +35,7 @@ const NARROW_RING_STEP = 32;
 // derselben Speiche uebereinander liegen.
 const RING_ANGLE_OFFSET_DEG = 37;
 
-// Fix-Runde 3 (Task-8-Review): unter NARROW_VIEWPORT bleibt es bei Stufe 1
+// Fix-Runde 3 (Task-8-Review): unter der Schwelle bleibt es bei Stufe 1
 // (kein Atlas) statt Stufe 2 (Ringe ohne Module). Gemessen bei 375px: das
 // Projektfenster hat eine feste Mindestbreite von 320px, es bleiben nur 55px
 // freie Flaeche — alle sechs Ringe liegen vollstaendig unterm Fenster, es
@@ -34,8 +44,17 @@ const RING_ANGLE_OFFSET_DEG = 37;
 // erscheint er unter dieser Breite in index.html gar nicht erst
 // (atlasAvailable verlangt maxLevelFor(w) > 1). Das ueberstimmt bewusst die
 // urspruengliche Spec-Regel "unter 760px zwei Stufen".
+//
+// Abschlusspruefung 1c, Marcos Entscheidung: die Schwelle steigt von 760 auf
+// ATLAS_MIN_VIEWPORT (1000). Dieselbe Begruendung, eine Stufe hoeher
+// angesetzt. Gemessen bei 780px: Ringradien 74/81/89/96/103/111 — eine
+// Spanne von 37 Einheiten fuer sechs Ringe, 24 Modulpunkte mit einem
+// engsten Abstand von 10px bei 15px hohen Labels. Das ist kein Atlas mehr,
+// das ist ein Klumpen. Bei 900px sind es 15px Abstand, immer noch
+// unlesbar. Ein Regler, dessen Ergebnis ein Klumpen ist, ist genauso
+// unehrlich wie einer, der gar nichts bewirkt.
 export function maxLevelFor(width) {
-  return width < NARROW_VIEWPORT ? 1 : 3;
+  return width < ATLAS_MIN_VIEWPORT ? 1 : 3;
 }
 
 function clamp(value, min, max) {
@@ -48,7 +67,7 @@ export function computeAtlasLayout(atlas, opts) {
   const layers = atlas?.layers ?? [];
   const modules = atlas?.modules ?? [];
 
-  const narrow = w < NARROW_VIEWPORT;
+  const narrow = w < NARROW_GEOMETRY;
   const innerRx = narrow ? NARROW_INNER_RX : INNER_RX;
   const step = narrow ? NARROW_RING_STEP : RING_STEP;
 

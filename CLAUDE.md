@@ -234,12 +234,19 @@ everywhere.
 Reinzoomen in einen Planeten zeigt die Architektur des jeweiligen Repos:
 Stufe 1 Projekt, Stufe 2 Layer-Ringe, Stufe 3 Modulknoten. Der Regler sitzt
 im Projektfenster und erscheint nur für Projekte, die in
-`data/atlas/index.json` stehen — **und nur ab 760px Viewportbreite.**
-Darunter deckt das Projektfenster fast die gesamte Breite ab (gemessen bei
-375px: 55px bleiben frei), der Atlas läge komplett dahinter; `maxLevelFor()`
-in `assets/js/atlas-layout.js` liefert dort deshalb 1, und der Regler wird
-gar nicht erst gerendert statt als ein Regler zu erscheinen, der nachweislich
-nichts bewirkt.
+`data/atlas/index.json` stehen — **und nur ab 1000px Viewportbreite**
+(`ATLAS_MIN_VIEWPORT` in `assets/js/atlas-layout.js`). Darunter deckt das
+Projektfenster fast die gesamte Breite ab (gemessen bei 375px: 55px bleiben
+frei), der Atlas läge komplett dahinter; und zwischen 760 und 1000px wird er
+zwar sichtbar, aber unlesbar (gemessen bei 780px: sechs Ringe auf 37
+Einheiten Spanne, 24 Modulpunkte mit 10px engstem Abstand bei 15px hohen
+Labels). `maxLevelFor()` liefert dort deshalb 1 und der Regler wird gar nicht
+erst gerendert — statt als ein Regler zu erscheinen, der nachweislich nichts
+bewirkt oder nur einen Klumpen erzeugt.
+
+**Nicht verwechseln:** die `@media (max-width: 760px)`-Regel fürs
+Mobile-Chrome (Falle 4) ist eine andere Sache und bleibt bei 760, ebenso die
+Schmalviewport-Schwelle der Ring-Geometrie.
 
 Rohdaten kommen von Understand-Anything (Egonex-AI, MIT) — **nur als
 Datenquelle, nie als UI**: ihr Viewer ist ein Node-Prozess und auf GitHub

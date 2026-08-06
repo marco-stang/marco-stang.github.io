@@ -353,6 +353,22 @@ Stufe 1, und `atlasAvailable` in `index.html` verlangt zusätzlich, dass mehr
 als eine Stufe erreichbar ist. Alle Stellen oben, die noch von „zwei Stufen
 unter 760 px" sprechen, sind durch diese Entscheidung überholt.
 
+### Nachtrag der Abschlussprüfung: Schwelle 1000 px
+
+Die 760er-Grenze war zu niedrig angesetzt. Gemessen bei 780 px Breite:
+Ringradien 74/81/89/96/103/111 — sechs Ringe auf einer Spanne von 37
+Einheiten, 24 Modulpunkte mit einem engsten Abstand von 10 px bei 15 px hohen
+Beschriftungen. Bei 900 px sind es 15 px Abstand. Der Atlas ist dort zwar
+sichtbar, aber nicht lesbar.
+
+**Marcos Entscheidung: der Regler erscheint erst ab 1000 px Viewportbreite.**
+Begründung wie oben, eine Stufe weitergedacht: ein Regler, dessen Ergebnis
+ein Klumpen ist, ist so unehrlich wie einer, der nichts bewirkt. Die
+Konstante heißt seither `ATLAS_MIN_VIEWPORT` und ist bewusst getrennt von der
+Schmalviewport-Schwelle der Geometrie (760) und von der
+`@media (max-width: 760px)`-Regel des Mobile-Chromes (Falle 4) — drei Zahlen,
+drei Bedeutungen, vorher teilweise dieselbe Konstante.
+
 ## Definition of Done
 
 1. `tools/gen-atlas.mjs` existiert, ist deterministisch und unit-getestet.

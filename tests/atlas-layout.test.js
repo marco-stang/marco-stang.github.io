@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computeAtlasLayout, maxLevelFor, NARROW_VIEWPORT } from "../assets/js/atlas-layout.js";
+import { computeAtlasLayout, maxLevelFor, ATLAS_MIN_VIEWPORT } from "../assets/js/atlas-layout.js";
 
 const ATLAS = {
   id: "sql-agent", repo: "sql-copilot", generatedAt: "2026-08-05",
@@ -81,13 +81,23 @@ test("der Sammelknoten wird als more markiert", () => {
   assert.equal(nodes.find((n) => n.id === "app").more, false);
 });
 
-// Fix-Runde 3 (Task-8-Review): unter NARROW_VIEWPORT bleibt es bei Stufe 1
+// Fix-Runde 3 (Task-8-Review): unterhalb der Schwelle bleibt es bei Stufe 1
 // (kein Atlas) statt vormals Stufe 2 -- das Projektfenster laesst dort so
 // wenig freie Flaeche, dass Ringe ohnehin komplett darunter liegen wuerden.
-test("maxLevelFor erlaubt nur Stufe 1 unterhalb von NARROW_VIEWPORT, Stufe 3 ab dort", () => {
-  assert.equal(maxLevelFor(NARROW_VIEWPORT - 1), 1);
-  assert.equal(maxLevelFor(NARROW_VIEWPORT), 3);
+// Abschlusspruefung 1c: Schwelle von 760 auf ATLAS_MIN_VIEWPORT (1000)
+// angehoben, weil die Ringe dazwischen zu einem unlesbaren Klumpen geraten.
+test("maxLevelFor erlaubt nur Stufe 1 unterhalb von ATLAS_MIN_VIEWPORT, Stufe 3 ab dort", () => {
+  assert.equal(maxLevelFor(ATLAS_MIN_VIEWPORT - 1), 1);
+  assert.equal(maxLevelFor(ATLAS_MIN_VIEWPORT), 3);
   assert.equal(maxLevelFor(1280), 3);
+});
+
+// Die gemessenen Zwischenbreiten aus Marcos Entscheidung, damit ein
+// spaeteres Herunterdrehen der Schwelle nicht unbemerkt durchgeht.
+test("die gemessenen Klumpen-Breiten 780 und 900 zeigen keinen Atlas", () => {
+  assert.equal(maxLevelFor(780), 1);
+  assert.equal(maxLevelFor(900), 1);
+  assert.equal(maxLevelFor(999), 1);
 });
 
 test("Stufe 3 auf schmalem Viewport faellt auf maxLevelFor(w) zurueck (heute Stufe 1)", () => {
