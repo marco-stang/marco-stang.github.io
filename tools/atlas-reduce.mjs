@@ -6,6 +6,31 @@
 export const MAX_LAYERS = 6;
 export const MAX_MODULES_PER_LAYER = 8;
 
+// Kartenlisten (Task: Code-Atlas-Redesign) zeigen Summaries als Fliesstext.
+// Die rohen Understand-Anything-Summaries sind oft mehrsaetzig und dicht --
+// diese Regel kappt auf den ersten Satz, mit einer Zeichenobergrenze als
+// Fallback fuer besonders lange Einzelsaetze. Deterministisch, keine
+// erneute LLM-Analyse noetig.
+export const MAX_SUMMARY_CHARS = 140;
+
+// Satzende: Punkt/Ausruf/Frage, gefolgt von Leerraum und einem Grossbuchstaben
+// (inkl. Umlaute). Das Leerraum-Erfordernis laesst deutsche Abkuerzungen wie
+// "z.B." oder "bzw." unangetastet, weil dort kein Leerzeichen zwischen Punkt
+// und naechstem Buchstaben steht.
+const SENTENCE_END = /[a-zäöü][.!?]\s+(?=[A-ZÄÖÜ])/;
+
+export function truncateSummary(text, maxChars = MAX_SUMMARY_CHARS) {
+  if (!text) return "";
+  const match = SENTENCE_END.exec(text);
+  // match.index points to the lowercase letter; find the period after it
+  const firstSentence = match ? text.slice(0, match.index + 2) : text;
+  if (firstSentence.length <= maxChars) return firstSentence;
+  const cut = firstSentence.slice(0, maxChars);
+  const lastSpace = cut.lastIndexOf(" ");
+  const trimmed = lastSpace > 0 ? cut.slice(0, lastSpace) : cut;
+  return `${trimmed}…`;
+}
+
 // Deterministische Sortierung: Fan-in absteigend, dann Fan-out absteigend,
 // dann Pfad alphabetisch, dann id alphabetisch. Ohne die letzte Stufe waere die
 // Reihenfolge bei Gleichstand von der Eingabereihenfolge abhaengig und ein
@@ -109,7 +134,7 @@ export function reduceGraph(nodes, options) {
       id: key,
       // Reihenfolge: Override schlaegt echten Namen schlaegt Schluessel.
       label: labels[key] ?? meta?.label ?? key,
-      summary: meta?.summary ?? chosen[0]?.summary ?? "",
+      summary: truncateSummary(meta?.summary ?? chosen[0]?.summary ?? ""),
       count: all.length
     });
 
@@ -119,7 +144,7 @@ export function reduceGraph(nodes, options) {
     // Funktion.
     const layerModules = chosen.map((n) => ({
       id: n.id, layerId: key, label: n.label, file: n.file,
-      summary: n.summary, deps: n.deps
+      summary: truncateSummary(n.summary), deps: n.deps
     }));
     disambiguateLabels(layerModules);
     modules.push(...layerModules);

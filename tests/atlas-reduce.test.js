@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { reduceGraph, MAX_LAYERS, MAX_MODULES_PER_LAYER } from "../tools/atlas-reduce.mjs";
+import { reduceGraph, MAX_LAYERS, MAX_MODULES_PER_LAYER, truncateSummary, MAX_SUMMARY_CHARS } from "../tools/atlas-reduce.mjs";
 
 const OPTS = {
   id: "sql-agent",
@@ -202,4 +202,59 @@ test("Dreier-Kollision: alle drei werden eindeutig disambiguiert", () => {
   const labels = atlas.modules.map((m) => m.label);
   assert.equal(new Set(labels).size, 3, "alle drei Labels muessen sich unterscheiden");
   assert.deepEqual(labels.slice().sort(), ["a/utils.py", "b/utils.py", "c/utils.py"]);
+});
+
+// --- Summary-Kuerzung -------------------------------------------------------
+
+test("truncateSummary: leerer String bleibt leer", () => {
+  assert.equal(truncateSummary(""), "");
+});
+
+test("truncateSummary: kurzer Text ohne Satzende bleibt unveraendert", () => {
+  assert.equal(truncateSummary("kurzer Text ohne Punkt"), "kurzer Text ohne Punkt");
+});
+
+test("truncateSummary: kuerzt auf den ersten Satz", () => {
+  assert.equal(
+    truncateSummary("Erster Satz hier. Zweiter Satz, der wegfaellt."),
+    "Erster Satz hier."
+  );
+});
+
+test("truncateSummary: laesst Abkuerzungen wie 'z.B.' nicht als Satzende gelten", () => {
+  // "z.B." hat keinen Leerraum zwischen Punkt und Grossbuchstabe -- die Regel
+  // (Punkt, DANN Leerraum, DANN Grossbuchstabe) darf hier nicht zuschlagen.
+  assert.equal(
+    truncateSummary("Nutzt Tools wie z.B. LangChain fuer die Anbindung."),
+    "Nutzt Tools wie z.B. LangChain fuer die Anbindung."
+  );
+});
+
+test("truncateSummary: schneidet einen langen ersten Satz an einer Wortgrenze und haengt … an", () => {
+  const long = `Dies ist ein sehr langer erster Satz ohne fruehen Punkt der ${"immer weiter geht ".repeat(6)}und schliesslich endet.`;
+  const result = truncateSummary(long);
+  assert.ok(result.length <= MAX_SUMMARY_CHARS + 1, "Ergebnis darf die Grenze plus Ellipse nicht ueberschreiten");
+  assert.ok(result.endsWith("…"));
+  assert.ok(!result.slice(0, -1).endsWith(" "), "kein Leerzeichen direkt vor der Ellipse");
+});
+
+test("reduceGraph kuerzt Modul-Summaries im Ergebnis", () => {
+  const long = `Dies ist ein sehr langer erster Satz ohne fruehen Punkt der ${"immer weiter geht ".repeat(6)}und endet. Ein zweiter Satz faellt weg.`;
+  const nodes = fanIn("ui", 1);
+  nodes[0].summary = long;
+  const atlas = reduceGraph(nodes, OPTS);
+  const modul = atlas.modules.find((m) => m.id === "ui-0");
+  assert.ok(modul.summary.length < long.length);
+  assert.ok(!modul.summary.includes("zweiter Satz"));
+});
+
+test("reduceGraph kuerzt Layer-Summaries im Ergebnis", () => {
+  const long = `Dies ist ein sehr langer erster Satz ohne fruehen Punkt der ${"immer weiter geht ".repeat(6)}und endet. Ein zweiter Satz faellt weg.`;
+  const atlas = reduceGraph(fanIn("ui", 1), {
+    ...OPTS,
+    layerMeta: [{ id: "ui", label: "Oberflaeche", summary: long }]
+  });
+  const layer = atlas.layers.find((l) => l.id === "ui");
+  assert.ok(layer.summary.length < long.length);
+  assert.ok(!layer.summary.includes("zweiter Satz"));
 });
