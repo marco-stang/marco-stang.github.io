@@ -4,7 +4,7 @@
   "generatedAt": "2026-08-05",
   "source": {
     "tool": "understand-anything",
-    "version": "1.0.0",
+    "graphVersion": "1.0.0",
     "license": "MIT"
   },
   "layers": [

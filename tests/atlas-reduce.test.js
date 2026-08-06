@@ -6,7 +6,9 @@ const OPTS = {
   id: "sql-agent",
   repo: "sql-copilot",
   generatedAt: "2026-08-05",
-  source: { tool: "understand-anything", version: "1.0.0", license: "MIT" }
+  // graphVersion, nicht version: das ist die Schema-Version des Rohgraphen,
+  // nicht die Version von Understand-Anything (Abschlusspruefung 2a).
+  source: { tool: "understand-anything", graphVersion: "1.0.0", license: "MIT" }
 };
 
 // n Knoten in einem Layer mit absteigendem Fan-in: Knoten i haengt von allen

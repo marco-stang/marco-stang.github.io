@@ -426,9 +426,26 @@ button{font:inherit}
                   <span style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#8a86a8">Tiefe</span>
                   <span style="font:500 11.5px/1 'Space Grotesk',sans-serif;color:{{ activeAccent }}">{{ atlasLevelLabel }}</span>
                 </div>
+                <!-- aria-valuetext (Abschlusspruefung 2g): ein
+                     <input type=range> laesst der Screenreader sonst als
+                     "1", "2", "3" vor -- Zahlen, die auf der Seite nirgends
+                     stehen. Die Stufen heissen "Projekt", "Struktur" und
+                     "Code", und genau das liest aria-valuetext vor. Es
+                     traegt denselben Wert wie das sichtbare Label rechts
+                     oben im Kasten, beide aus atlasLevelLabel. -->
                 <input type="range" min="1" max="{{ atlasMaxLevel }}" step="1" value="{{ atlasLevel }}"
-                       onInput="{{ setAtlasLevelFromInput }}" aria-label="Detailtiefe der Architekturansicht"
+                       onInput="{{ setAtlasLevelFromInput }}"
+                       aria-label="Detailtiefe der Architekturansicht: Projekt, Struktur, Code"
+                       aria-valuetext="{{ atlasLevelLabel }}"
                        style="width:100%;accent-color:#b48cf5;cursor:pointer">
+                <!-- Abschlusspruefung 2b: Fehlerzeile UND Attribution, nicht
+                     entweder/oder. Die Attribution ist laut Spec verbindlich,
+                     solange der Regler sichtbar ist -- sie darf nicht
+                     ausgerechnet dann verschwinden, wenn eine zweite Zeile
+                     erscheint. Vorher hat die Fehlermeldung sie ersetzt. -->
+                <sc-if value="{{ atlasError }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:8px;font:400 10px/1.4 'JetBrains Mono',monospace;color:#f2b45c">Architekturdaten gerade nicht verfügbar</div>
+                </sc-if>
                 <div style="margin-top:8px;font:400 10px/1.4 'JetBrains Mono',monospace;color:#6f6a92">{{ atlasHint }}</div>
               </div>
             </sc-if>
@@ -1471,9 +1488,11 @@ class Component extends DCLogic {
       atlasLevel: this.atlasLevelEff(),
       atlasMaxLevel: this.atlasMaxLevel(),
       atlasLevelLabel: ["", "Projekt", "Struktur", "Code"][this.atlasLevelEff()] || "Projekt",
-      atlasHint: this.state.atlasError
-        ? "Architekturdaten gerade nicht verfügbar"
-        : "Graph-Extraktion: Understand-Anything (MIT) · Reduktion und Darstellung: eigene Pipeline",
+      // Abschlusspruefung 2b: die Attribution steht jetzt IMMER, wenn der
+      // Regler sichtbar ist. Der Fehlerfall bekommt eine eigene Zeile
+      // darueber (siehe Template) statt die Attribution zu verdraengen.
+      atlasError: this.state.atlasError,
+      atlasHint: "Graph-Extraktion: Understand-Anything (MIT) · Reduktion und Darstellung: eigene Pipeline",
       setAtlasLevelFromInput: (e) => this.setAtlasLevel(Number(e.target.value)),
       activeDescription: activeP ? activeP.description : "",
       activeCluster: isResume ? "Lebenslauf" : activeP ? D.CLUSTERS[activeP.cluster].label : "",

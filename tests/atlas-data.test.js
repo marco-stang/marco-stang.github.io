@@ -28,6 +28,39 @@ test("weist alles zurueck, was den Vertrag verletzt", () => {
   assert.equal(isValidAtlas({ ...GUELTIG, modules: [null] }), false);
 });
 
+// Abschlusspruefung 2e: die Strukturpruefung allein liess Atlanten durch,
+// die zwar wohlgeformt, aber inhaltlich unbrauchbar oder schlicht das
+// falsche Projekt waren -- die Szene dimmte dann auf 0.04 und zeigte
+// nichts, ohne Meldung.
+test("ein Atlas ohne Layer ist ungueltig", () => {
+  assert.equal(isValidAtlas({ ...GUELTIG, layers: [], modules: [] }), false);
+  assert.equal(isValidAtlas({ ...GUELTIG, layers: [] }), false);
+});
+
+test("ein Atlas ohne Module bleibt gueltig — Stufe 2 zeigt reine Layer-Ringe", () => {
+  assert.equal(isValidAtlas({ ...GUELTIG, modules: [] }), true);
+});
+
+test("die id muss zum angefragten Projekt gehoeren", () => {
+  assert.equal(isValidAtlas(GUELTIG, "sql-agent"), true);
+  assert.equal(isValidAtlas(GUELTIG, "amalea"), false);
+  // Ohne erwartete id bleibt die Pruefung wie zuvor rein strukturell.
+  assert.equal(isValidAtlas(GUELTIG), true);
+  assert.equal(isValidAtlas(GUELTIG, ""), true);
+});
+
+test("loadAtlas verwirft einen Atlas, der ein anderes Projekt beschreibt", async () => {
+  __resetAtlasCache();
+  const fetchImpl = async () => ({ ok: true, json: async () => GUELTIG });
+  assert.equal(await loadAtlas("amalea", "https://example.test/", fetchImpl), null);
+});
+
+test("loadAtlas verwirft einen inhaltsleeren Atlas", async () => {
+  __resetAtlasCache();
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ ...GUELTIG, layers: [], modules: [] }) });
+  assert.equal(await loadAtlas("sql-agent", "https://example.test/", fetchImpl), null);
+});
+
 test("hasAtlas liest den Index defensiv", () => {
   const index = { projects: { "sql-agent": { layers: 2, modules: 9 } } };
   assert.equal(hasAtlas(index, "sql-agent"), true);

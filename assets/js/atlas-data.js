@@ -15,12 +15,27 @@ export function __resetAtlasCache() {
   inFlight.clear();
 }
 
-export function isValidAtlas(value) {
+// expectedId ist die Projekt-id, fuer die der Atlas geholt wurde. Ist sie
+// angegeben, muss der Inhalt sie auch tragen (Abschlusspruefung 2e).
+export function isValidAtlas(value, expectedId) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   if (typeof value.id !== "string" || !value.id) return false;
   if (!Array.isArray(value.layers) || !Array.isArray(value.modules)) return false;
   if (!value.layers.every((l) => l && typeof l.id === "string" && typeof l.label === "string")) return false;
   if (!value.modules.every((m) => m && typeof m.id === "string" && typeof m.layerId === "string")) return false;
+  // Mindestinhalt. Die Struktur allein reichte bislang: ein Atlas mit
+  // layers: [] galt als gueltig, die Kamera flog los, die Hauptszene dimmte
+  // auf 0.04 -- und der Besucher sah nichts, ohne jede Meldung. Genau das
+  // passiert bei einem Deploy-Zwischenstand mit halb geschriebener Datei.
+  // Ein leerer Atlas ist kein gueltiger Atlas, sondern ein Fehlerfall, und
+  // gehoert damit in denselben stillen null-Pfad wie ein kaputtes JSON.
+  // modules darf leer sein: Stufe 2 zeigt reine Layer-Ringe und ist damit
+  // eine ehrliche, vollstaendige Ansicht.
+  if (value.layers.length === 0) return false;
+  // Ein Atlas, dessen id nicht zum angefragten Projekt gehoert, beschreibt
+  // ein anderes Repo. Die Szene wuerde ihn stillschweigend als Architektur
+  // dieses Planeten ausgeben -- eine Falschaussage, kein Darstellungsfehler.
+  if (typeof expectedId === "string" && expectedId && value.id !== expectedId) return false;
   return true;
 }
 
@@ -54,7 +69,7 @@ export async function loadAtlas(projectId, baseUrl, fetchImpl = globalThis.fetch
 
   const promise = (async () => {
     const data = await fetchJson(`${baseUrl}data/atlas/${projectId}.json`, fetchImpl);
-    if (!isValidAtlas(data)) return null;
+    if (!isValidAtlas(data, projectId)) return null;
     cache.set(projectId, data);
     return data;
   })().finally(() => inFlight.delete(projectId));

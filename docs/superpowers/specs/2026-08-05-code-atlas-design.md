@@ -128,8 +128,10 @@ nicht langsamer werden.
 {
   id: "sql-agent",                    // muss zu data/projects.js passen
   repo: "sql-copilot",
-  generatedAt: "2026-08-05",
-  source: { tool: "understand-anything", version: "…", license: "MIT" },
+  generatedAt: "2026-08-05",       // aus project.analyzedAt des Rohgraphen
+  // graphVersion, nicht version: das ist die Schema-Version des Rohgraphen
+  // ("1.0.0"), nicht die Version von Understand-Anything.
+  source: { tool: "understand-anything", graphVersion: "1.0.0", license: "MIT" },
   layers: [                            // Stufe 2 → Ringe um den Planeten
     { id: "ui",     label: "Oberfläche",  summary: "…", count: 3 },
     { id: "agent",  label: "Agent-Logik", summary: "…", count: 7 }

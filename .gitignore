@@ -12,6 +12,13 @@
 .impeccable/*
 !.impeccable/config.json
 
+# Understand-Anything legt sein Arbeitsverzeichnis IM analysierten Repo ab.
+# Der Rohgraph ist megabytegross; committed wird nur die reduzierte Fassung
+# unter data/atlas/ (siehe Code-Atlas-Spec und CLAUDE.md). Sobald jemand
+# /understand hier auf marco-os selbst laufen laesst, liegt .ua/ sonst
+# untracked herum.
+.ua/
+
 # OneDrive legt bei Sync-Konflikten Kopien an, Git bei Abbruechen Lock-Dateien.
 _to_delete/
 *.lock.*

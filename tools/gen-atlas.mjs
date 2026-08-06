@@ -34,13 +34,36 @@ if (nodes.length === 0) fail("Rohgraph enthaelt keine verwertbaren Knoten — Ro
 const overridePath = `${OVERRIDES_DIR}${projectId}.json`;
 const overrides = existsSync(overridePath) ? JSON.parse(readFileSync(overridePath, "utf8")) : null;
 
+// Datum des Rohgraphen, nicht des Generatorlaufs (Abschlusspruefung 2c).
+// new Date() machte den Generator tagesabhaengig statt inhaltsabhaengig:
+// derselbe Rohgraph am Folgetag erzeugte ein Diff, obwohl sich nichts
+// geaendert hatte -- "deterministisch bis Mitternacht" ist nicht
+// deterministisch. project.analyzedAt ist der Zeitstempel der Analyse
+// (siehe docs/superpowers/plans/2026-08-05-atlas-rohschema.md) und aendert
+// sich genau dann, wenn sich der Inhalt aendern kann.
+// Nur das Datum, nicht die Uhrzeit: ein erneuter /understand-Lauf am selben
+// Tag soll kein Diff erzeugen, wenn der Graph gleich geblieben ist.
+// Rueckfall auf das heutige Datum, falls das Feld fehlt oder kein
+// ISO-Datum ist -- das ist der einzige nicht-deterministische Pfad und
+// bleibt sichtbar, weil er eine Warnung schreibt.
+const analyzedAt = typeof raw?.project?.analyzedAt === "string" ? raw.project.analyzedAt : "";
+if (!/^\d{4}-\d{2}-\d{2}/.test(analyzedAt)) {
+  console.warn("gen-atlas: WARNUNG — project.analyzedAt fehlt im Rohgraphen, generatedAt faellt auf das heutige Datum zurueck.");
+}
+const generatedAt = /^\d{4}-\d{2}-\d{2}/.test(analyzedAt)
+  ? analyzedAt.slice(0, 10)
+  : new Date().toISOString().slice(0, 10);
+
 const atlas = reduceGraph(nodes, {
   id: projectId,
   repo: repoPath.split(/[/\\]/).filter(Boolean).pop(),
-  // Nur das Datum, nicht die Uhrzeit: sonst erzeugt jeder Lauf ein Diff,
-  // obwohl sich inhaltlich nichts geaendert hat.
-  generatedAt: new Date().toISOString().slice(0, 10),
-  source: { tool: "understand-anything", version: raw?.version ?? "unbekannt", license: "MIT" },
+  generatedAt,
+  // graphVersion, NICHT version (Abschlusspruefung 2a): raw.version ist laut
+  // Rohschema-Dokument die Schema-Version des GRAPHEN ("1.0.0"), nicht die
+  // Version von Understand-Anything. Neben tool: "understand-anything" las
+  // sich ein blosses "version" als Werkzeugversion — eine falsche Angabe an
+  // genau der Stelle, die die verbindliche Attribution traegt.
+  source: { tool: "understand-anything", graphVersion: raw?.version ?? "unbekannt", license: "MIT" },
   // Echte, deutsche Layer-Namen und -Beschreibungen aus dem Rohgraphen statt
   // aus dem Schluessel erfundener Titel.
   layerMeta: layers,
@@ -53,12 +76,17 @@ writeFileSync(`${ATLAS_DIR}${projectId}.json`, atlasJson);
 
 const indexPath = `${ATLAS_DIR}index.json`;
 const index = existsSync(indexPath) ? JSON.parse(readFileSync(indexPath, "utf8")) : { projects: {} };
+// generatedAt haengt am jeweiligen Projekteintrag, nicht an der Datei
+// (Abschlusspruefung 2d): ein Lauf fuer Projekt B hat sonst auch Projekt A
+// umdatiert, obwohl dessen Atlas monatealt sein kann.
 index.projects[projectId] = {
   repo: atlas.repo,
   layers: atlas.layers.length,
-  modules: atlas.modules.filter((m) => !m.more).length
+  modules: atlas.modules.filter((m) => !m.more).length,
+  generatedAt: atlas.generatedAt
 };
-index.generatedAt = atlas.generatedAt;
+// Altbestand aufraeumen: aeltere index.json tragen das Feld noch global.
+delete index.generatedAt;
 // Schluessel sortieren: sonst haengt die Reihenfolge davon ab, in welcher
 // Reihenfolge man die Repos zufaellig verarbeitet hat.
 index.projects = Object.fromEntries(Object.entries(index.projects).sort(([a], [b]) => a.localeCompare(b)));

@@ -3,8 +3,8 @@
     "sql-agent": {
       "repo": "sql-copilot",
       "layers": 6,
-      "modules": 24
+      "modules": 24,
+      "generatedAt": "2026-08-05"
     }
-  },
-  "generatedAt": "2026-08-05"
+  }
 }
