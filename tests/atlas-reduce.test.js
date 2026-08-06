@@ -230,6 +230,14 @@ test("truncateSummary: laesst Abkuerzungen wie 'z.B.' nicht als Satzende gelten"
   );
 });
 
+test("truncateSummary: laesst mehrbuchstabige Abkuerzungen wie 'inkl.' nicht als Satzende gelten", () => {
+  // Realer Fund beim Regenerieren des sql-agent-Atlas: "...SQL-Generierung
+  // (inkl. Retry-Variante..." wurde faelschlich als Satzende erkannt und
+  // schnitt mitten in der offenen Klammer ab.
+  const text = "Baut Nachrichten fuer die SQL-Generierung (inkl. Retry-Variante mit vorheriger Query) und fuer die Beantwortung in natuerlicher Sprache.";
+  assert.equal(truncateSummary(text, 1000), text, "bei ausreichendem Platz muss der ganze Satz erhalten bleiben");
+});
+
 test("truncateSummary: erkennt Akronyme als echte Satzenden (REST API-Fall)", () => {
   // "REST API." endet mit Punkt nach einem Großbuchstaben (nicht vor),
   // darum ist das echtes Satzende, nicht Abkürzung -- sollte kürzen.
@@ -269,6 +277,27 @@ test("truncateSummary: schneidet einen langen ersten Satz an einer Wortgrenze un
   assert.ok(result.length <= MAX_SUMMARY_CHARS + 1, "Ergebnis darf die Grenze plus Ellipse nicht ueberschreiten");
   assert.ok(result.endsWith("…"));
   assert.ok(!result.slice(0, -1).endsWith(" "), "kein Leerzeichen direkt vor der Ellipse");
+});
+
+test("truncateSummary: behaelt einen ersten Satz knapp ueber der Grenze ganz (Toleranz)", () => {
+  // Erster Satz 149 Zeichen -- 9 ueber MAX_SUMMARY_CHARS (140), aber innerhalb
+  // der 15%-Toleranz (140 * 1.15 = 161). Zweiter Satz muss trotzdem wegfallen
+  // (die Toleranz behaelt den ganzen ERSTEN Satz, nicht den ganzen Text).
+  const firstSentence = "A".repeat(148) + ".";
+  const text = `${firstSentence} Zweiter Satz faellt trotzdem weg.`;
+  assert.equal(firstSentence.length > MAX_SUMMARY_CHARS && firstSentence.length <= MAX_SUMMARY_CHARS * 1.15, true,
+    "Testsatz muss tatsaechlich im Toleranzbereich liegen, sonst prueft der Test nichts");
+  assert.equal(truncateSummary(text), firstSentence);
+});
+
+test("truncateSummary: schneidet trotzdem, wenn der erste Satz die Toleranz ueberschreitet", () => {
+  // 166 Zeichen -- ueber der Toleranzgrenze (161) -- muss weiterhin hart
+  // geschnitten werden, sonst waere die Toleranz keine Grenze mehr.
+  const overTolerance = "A".repeat(155) + " Ende hier.";
+  assert.ok(overTolerance.length > MAX_SUMMARY_CHARS * 1.15, "Testsatz muss ueber der Toleranzgrenze liegen");
+  const result = truncateSummary(overTolerance);
+  assert.ok(result.length <= MAX_SUMMARY_CHARS + 1);
+  assert.ok(result.endsWith("…"));
 });
 
 test("reduceGraph kuerzt Modul-Summaries im Ergebnis", () => {

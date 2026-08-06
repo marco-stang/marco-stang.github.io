@@ -13,20 +13,37 @@ export const MAX_MODULES_PER_LAYER = 8;
 // erneute LLM-Analyse noetig.
 export const MAX_SUMMARY_CHARS = 140;
 
+// Toleranz (Abschlussreview): ein erster Satz, der nur knapp ueber der
+// Zeichengrenze liegt, wird ganz behalten statt hart abgeschnitten. Ohne
+// Toleranz verlor z.B. eine 147-Zeichen-Summary ("...aussieht.") ihr
+// eigentliches Satzende und endete mitten im vorletzten Wort. 15% ist ein
+// Kompromiss: grosszuegig genug, um die haeufigen knapp-drueber-Faelle zu
+// retten, aber eng genug, dass die Grenze nicht bedeutungslos wird.
+const TOLERANCE = 1.15;
+
 // Satzende: Punkt/Ausruf/Frage, gefolgt von Leerraum und einem Grossbuchstaben
-// (inkl. Umlaute). Negative Lookbehind (?<!\.[A-Za-zÄÖÜäöü]) schliesst Punkte aus,
-// die selbst Teil einer Abkuerzungsform wie "z." oder "B." sind — damit bleibt
-// "z.B." unangetastet (der Punkt nach "B" haengt an ".B" und wird blockiert),
-// waehrend "API.", Ziffernenden, und Klammernenden als echte Satzenden erkannt
-// werden (z.B. "REST API. Bietet..." → kuerzt zu "REST API.").
-const SENTENCE_END = /(?<!\.[A-Za-zÄÖÜäöü])[.!?]\s+(?=[A-ZÄÖÜ])/;
+// (inkl. Umlaute). Erster negativer Lookbehind (?<!\.[A-Za-zÄÖÜäöü]) schliesst
+// Punkte aus, die selbst Teil einer Ein-Buchstaben-Abkuerzung wie "z." oder
+// "B." sind — damit bleibt "z.B." unangetastet. Zweiter Lookbehind schliesst
+// zusaetzlich eine kleine, feste Liste haeufiger mehrbuchstabiger deutscher
+// Abkuerzungen aus (gefunden beim Regenerieren des sql-agent-Atlas: "...für
+// die SQL-Generierung (inkl. Retry-Variante..." wurde faelschlich als
+// Satzende erkannt und schnitt mitten in der Klammer ab). Bewusst eine feste
+// Liste statt eines Woerterbuchs — deterministisch, keine neue Abhaengigkeit,
+// deckt die real vorkommenden Faelle ab, ohne die Funktion in ein
+// Abkuerzungslexikon zu verwandeln. "API.", Ziffernenden und Klammernenden
+// bleiben echte Satzenden (z.B. "REST API. Bietet..." → kuerzt zu "REST API.").
+const ABBREVIATIONS = "bzw|ca|ggf|evtl|inkl|usw|vgl|etc|max|min|Nr|Abb|Kap|Mio|Dr|Prof|sog";
+const SENTENCE_END = new RegExp(
+  `(?<!\\.[A-Za-zÄÖÜäöü])(?<!\\b(?:${ABBREVIATIONS}))[.!?]\\s+(?=[A-ZÄÖÜ])`
+);
 
 export function truncateSummary(text, maxChars = MAX_SUMMARY_CHARS) {
   if (!text) return "";
   const match = SENTENCE_END.exec(text);
   // match.index points to the punctuation mark; include it, exclude the trailing space
   const firstSentence = match ? text.slice(0, match.index + 1) : text;
-  if (firstSentence.length <= maxChars) return firstSentence;
+  if (firstSentence.length <= maxChars * TOLERANCE) return firstSentence;
   const cut = firstSentence.slice(0, maxChars);
   const lastSpace = cut.lastIndexOf(" ");
   const trimmed = lastSpace > 0 ? cut.slice(0, lastSpace) : cut;

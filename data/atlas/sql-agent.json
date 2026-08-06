@@ -75,7 +75,7 @@
       "layerId": "agent",
       "label": "llm.py",
       "file": "src/agent/llm.py",
-      "summary": "Providerunabhängiges LLM-Setup: liest LLM_PROVIDER und LLM_MODEL aus der Umgebung und erzeugt darüber via LangChains init_chat_model das…",
+      "summary": "Providerunabhängiges LLM-Setup: liest LLM_PROVIDER und LLM_MODEL aus der Umgebung und erzeugt darüber via LangChains init_chat_model das Chat-Modell.",
       "deps": []
     },
     {
@@ -161,7 +161,7 @@
       "layerId": "test",
       "label": "run_evals.py",
       "file": "evals/run_evals.py",
-      "summary": "Eval-Runner, der den Agenten alle Fragen aus questions.yaml beantworten lässt und sein SQL-Ergebnis mit dem der handgeschriebenen…",
+      "summary": "Eval-Runner, der den Agenten alle Fragen aus questions.yaml beantworten lässt und sein SQL-Ergebnis mit dem der handgeschriebenen Referenz-SQL vergleicht.",
       "deps": [
         "file:src/agent/graph.py",
         "file:src/agent/llm.py",
@@ -290,7 +290,7 @@
       "layerId": "ui",
       "label": "portfolio_ui.py",
       "file": "src/portfolio_ui.py",
-      "summary": "Gemeinsame UI-Bausteine im MARCO.OS-Portfolio-Stil (Kopfbereich, Beispiel-Einstieg, Technik-Bereich, Fusszeile) inklusive Farbtoken und…",
+      "summary": "Gemeinsame UI-Bausteine im MARCO.OS-Portfolio-Stil (Kopfbereich, Beispiel-Einstieg, Technik-Bereich, Fusszeile) inklusive Farbtoken und Cluster-Akzenten.",
       "deps": []
     },
     {
@@ -298,7 +298,7 @@
       "layerId": "ui",
       "label": "config.toml",
       "file": ".streamlit/config.toml",
-      "summary": "Streamlit-Theme-Konfiguration im MARCO.OS-Look: dunkle Basis mit Amber-Akzent, damit das Dashboard nicht wie eine Standard-Streamlit-Demo…",
+      "summary": "Streamlit-Theme-Konfiguration im MARCO.OS-Look: dunkle Basis mit Amber-Akzent, damit das Dashboard nicht wie eine Standard-Streamlit-Demo aussieht.",
       "deps": [
         "file:src/app.py"
       ]
