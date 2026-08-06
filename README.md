@@ -45,11 +45,12 @@ CSS hart neu laden (Strg+Shift+R), sonst siehst du den alten Stand.
 npm test
 ```
 
-Läuft über Node's eingebauten Test-Runner, keine Abhängigkeiten. 101 Tests über
+Läuft über Node's eingebauten Test-Runner, keine Abhängigkeiten. 169 Tests über
 `graph-layout`, `state` (inkl. Zoom-Clamping), `projects`, `resume`,
 `html-utils`, `focus-target`, `face-constellation`, `terminal-commands`
-(Legacy-Parser, Tour-Schrittdaten, GitHub-Datumsformatierung) und
-`terminal-v3` (v3-Parser plus die aus `data/` abgeleiteten Daten).
+(Legacy-Parser, Tour-Schrittdaten, GitHub-Datumsformatierung), `terminal-v3`
+(v3-Parser plus die aus `data/` abgeleiteten Daten) sowie die Code-Atlas-Module
+`atlas-normalize`, `atlas-reduce`, `atlas-layout` und `atlas-data`.
 
 `node --test tests/` mit Verzeichnis funktioniert auf diesem Node-Build
 **nicht** — `npm test` oder `node --test "tests/*.test.js"` benutzen.
