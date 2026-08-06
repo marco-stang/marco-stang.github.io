@@ -230,6 +230,39 @@ test("truncateSummary: laesst Abkuerzungen wie 'z.B.' nicht als Satzende gelten"
   );
 });
 
+test("truncateSummary: erkennt Akronyme als echte Satzenden (REST API-Fall)", () => {
+  // "REST API." endet mit Punkt nach einem Großbuchstaben (nicht vor),
+  // darum ist das echtes Satzende, nicht Abkürzung -- sollte kürzen.
+  assert.equal(
+    truncateSummary("Nutzt die REST API. Bietet Endpunkte fuer den Client."),
+    "Nutzt die REST API."
+  );
+});
+
+test("truncateSummary: erkennt Akronyme wie SQL als echte Satzenden", () => {
+  // SQL-Sätze enden genauso; die Lookbehind schließt "SQL." nicht aus.
+  assert.equal(
+    truncateSummary("Erzeugt gueltiges SQL. Die Ausgabe wird direkt ausgefuehrt."),
+    "Erzeugt gueltiges SQL."
+  );
+});
+
+test("truncateSummary: erkennt Zahlenenden als echte Satzenden", () => {
+  // Ein Punkt nach einer Ziffer ist auch echtes Satzende.
+  assert.equal(
+    truncateSummary("Laesst bis zu 5. Wiederholungen zu."),
+    "Laesst bis zu 5."
+  );
+});
+
+test("truncateSummary: erkennt Klammernenden als echte Satzenden", () => {
+  // Ein Punkt nach einer schließenden Klammer ist echtes Satzende.
+  assert.equal(
+    truncateSummary("Dies ist ein Beispiel (siehe Architektur oben). Der Cache arbeitet dabei."),
+    "Dies ist ein Beispiel (siehe Architektur oben)."
+  );
+});
+
 test("truncateSummary: schneidet einen langen ersten Satz an einer Wortgrenze und haengt … an", () => {
   const long = `Dies ist ein sehr langer erster Satz ohne fruehen Punkt der ${"immer weiter geht ".repeat(6)}und schliesslich endet.`;
   const result = truncateSummary(long);

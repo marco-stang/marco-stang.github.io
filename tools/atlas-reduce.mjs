@@ -14,16 +14,18 @@ export const MAX_MODULES_PER_LAYER = 8;
 export const MAX_SUMMARY_CHARS = 140;
 
 // Satzende: Punkt/Ausruf/Frage, gefolgt von Leerraum und einem Grossbuchstaben
-// (inkl. Umlaute). Das Leerraum-Erfordernis laesst deutsche Abkuerzungen wie
-// "z.B." oder "bzw." unangetastet, weil dort kein Leerzeichen zwischen Punkt
-// und naechstem Buchstaben steht.
-const SENTENCE_END = /[a-zäöü][.!?]\s+(?=[A-ZÄÖÜ])/;
+// (inkl. Umlaute). Negative Lookbehind (?<!\.[A-Za-zÄÖÜäöü]) schliesst Punkte aus,
+// die selbst Teil einer Abkuerzungsform wie "z." oder "B." sind — damit bleibt
+// "z.B." unangetastet (der Punkt nach "B" haengt an ".B" und wird blockiert),
+// waehrend "API.", Ziffernenden, und Klammernenden als echte Satzenden erkannt
+// werden (z.B. "REST API. Bietet..." → kuerzt zu "REST API.").
+const SENTENCE_END = /(?<!\.[A-Za-zÄÖÜäöü])[.!?]\s+(?=[A-ZÄÖÜ])/;
 
 export function truncateSummary(text, maxChars = MAX_SUMMARY_CHARS) {
   if (!text) return "";
   const match = SENTENCE_END.exec(text);
-  // match.index points to the lowercase letter; find the period after it
-  const firstSentence = match ? text.slice(0, match.index + 2) : text;
+  // match.index points to the punctuation mark; include it, exclude the trailing space
+  const firstSentence = match ? text.slice(0, match.index + 1) : text;
   if (firstSentence.length <= maxChars) return firstSentence;
   const cut = firstSentence.slice(0, maxChars);
   const lastSpace = cut.lastIndexOf(" ");
