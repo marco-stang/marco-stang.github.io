@@ -90,6 +90,12 @@ export function reduceGraph(nodes, options) {
   const pin = new Set(overrides?.pin ?? []);
   const hide = new Set(overrides?.hide ?? []);
   const labels = overrides?.labels ?? {};
+  // Redaktionelle Teaser-Saetze, zusaetzlich zur automatischen Kuerzung
+  // (Marcos Entscheidung, siehe Design-Spec): frei formuliert, keine
+  // Laengengrenze. Nur nicht-leere Strings zaehlen.
+  const highlights = Array.isArray(overrides?.highlights)
+    ? overrides.highlights.filter((h) => typeof h === "string" && h.length > 0)
+    : [];
   const metaById = new Map(layerMeta.map((l) => [l.id, l]));
 
   const visible = (nodes ?? []).filter((n) => !hide.has(n.id));
@@ -165,5 +171,5 @@ export function reduceGraph(nodes, options) {
   const kept = new Set(modules.map((m) => m.id));
   for (const m of modules) m.deps = m.deps.filter((d) => kept.has(d));
 
-  return { id, repo, generatedAt, source, layers, modules };
+  return { id, repo, generatedAt, source, layers, modules, ...(highlights.length > 0 ? { highlights } : {}) };
 }

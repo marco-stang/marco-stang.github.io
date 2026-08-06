@@ -196,6 +196,18 @@ test("laedt tools/atlas-overrides/<id>.json und wendet hide und labels an", () =
   assert.equal(atlas.layers.find((l) => l.id === "ui").label, "Eigener Titel", "labels muss greifen");
 });
 
+test("laedt highlights aus der Override-Datei", () => {
+  const outDir = neuesVerzeichnis("out");
+  const overridesDir = neuesVerzeichnis("overrides");
+  writeFileSync(join(overridesDir, "sql-agent.json"), JSON.stringify({
+    highlights: ["Guardrails pruefen jede generierte SQL vor der Ausfuehrung."]
+  }));
+
+  assert.equal(lauf(repoMitGraph(), "sql-agent", { outDir, overridesDir }).status, 0);
+  const atlas = lies(outDir, "sql-agent.json");
+  assert.deepEqual(atlas.highlights, ["Guardrails pruefen jede generierte SQL vor der Ausfuehrung."]);
+});
+
 test("ohne Override-Datei laeuft der Generator rein automatisch", () => {
   const outDir = neuesVerzeichnis("out");
   // Leeres Override-Verzeichnis: die Datei existiert nicht, das darf kein

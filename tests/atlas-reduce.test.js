@@ -291,3 +291,31 @@ test("reduceGraph kuerzt Layer-Summaries im Ergebnis", () => {
   assert.ok(layer.summary.length < long.length);
   assert.ok(!layer.summary.includes("zweiter Satz"));
 });
+
+// --- highlights (redaktionelle Teaser-Saetze) --------------------------------
+
+test("uebernimmt highlights aus der Override-Datei", () => {
+  const atlas = reduceGraph(fanIn("ui", 1), {
+    ...OPTS,
+    overrides: { highlights: ["Erster Punkt.", "Zweiter Punkt."] }
+  });
+  assert.deepEqual(atlas.highlights, ["Erster Punkt.", "Zweiter Punkt."]);
+});
+
+test("ohne highlights-Feld fehlt highlights im Ergebnis ganz", () => {
+  const atlas = reduceGraph(fanIn("ui", 1), OPTS);
+  assert.equal("highlights" in atlas, false);
+});
+
+test("leeres highlights-Array fehlt im Ergebnis ganz", () => {
+  const atlas = reduceGraph(fanIn("ui", 1), { ...OPTS, overrides: { highlights: [] } });
+  assert.equal("highlights" in atlas, false);
+});
+
+test("nicht-String-Eintraege in highlights werden verworfen", () => {
+  const atlas = reduceGraph(fanIn("ui", 1), {
+    ...OPTS,
+    overrides: { highlights: ["gueltig", 42, "", null, "auch gueltig"] }
+  });
+  assert.deepEqual(atlas.highlights, ["gueltig", "auch gueltig"]);
+});
