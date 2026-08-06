@@ -92,9 +92,17 @@ test("labels-Override setzt den Layer-Namen (fuer deutsche Beschriftung)", () =>
   assert.equal(atlas.layers.find((l) => l.id === "ui").label, "Oberflaeche");
 });
 
-test("Knoten ohne layer landen im Sammel-Layer 'sonstiges'", () => {
-  const atlas = reduceGraph([{ id: "x", label: "x.py", file: "x.py", layer: "", summary: "", deps: [] }], OPTS);
-  assert.equal(atlas.layers[0].id, "sonstiges");
+// Abschlusspruefung 3a: der Sammel-Layer "sonstiges" ist raus. Seit dem
+// Task-2-Neuschrieb baut normalizeGraph seine Ausgabe aus layerOfNode auf
+// und kann keinen layerlosen Knoten mehr liefern — der Fallback war
+// unerreichbar, und der einzige Test dafuer deckte ausschliesslich diesen
+// toten Pfad ab. Statt eines stillen Ersatzrings bricht reduceGraph jetzt
+// laut ab, wenn die Vorbedingung doch einmal verletzt wird.
+test("ein Knoten ohne layer ist ein Adapterfehler und bricht laut ab", () => {
+  assert.throws(
+    () => reduceGraph([{ id: "x", label: "x.py", file: "x.py", layer: "", summary: "", deps: [] }], OPTS),
+    /Knoten "x" hat keinen Layer/
+  );
 });
 
 test("deps zeigen nach der Kappung nur auf ausgelieferte Module", () => {

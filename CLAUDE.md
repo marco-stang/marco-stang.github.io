@@ -90,7 +90,7 @@ therefore normalizes to `#ask-marco`.
 ## Commands
 
 ```bash
-npm test                     # runs `node --test`, discovers tests/*.test.js — 78 passing
+npm test                     # runs `node --test`, discovers tests/*.test.js — 188 passing
 node --check <file>.js       # per-file syntax check
 start-local.bat              # Windows: server on :8000 + opens the browser
 python -m http.server 8000   # otherwise, then open http://localhost:8000/

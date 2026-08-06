@@ -74,8 +74,13 @@ export function normalizeGraph(raw) {
   }
 
   // Nur Knoten mit Layer behalten — das ist die Datei-Ebene und damit die
-  // Granularitaet, die "Modul" in der Spec meint. Funktions- und
-  // Klassenknoten wuerden sonst den Sammelring fluten.
+  // Granularitaet, die "Modul" in der Spec meint. Die 37 Funktions- und
+  // Klassenknoten des Pilot-Graphen liegen in keinem Layer; sie waeren
+  // Innenleben einzelner Dateien, keine Architektur, und wuerden die echten
+  // Layer-Ringe zahlenmaessig erdruecken. (Frueher stand hier "wuerden sonst
+  // den Sammelring fluten" — den Sammelring "sonstiges" gibt es seit der
+  // Abschlusspruefung nicht mehr, die Auswahl hier ist der Grund dafuer:
+  // aus DIESER Zeile folgt, dass jeder ausgegebene Knoten einen Layer hat.)
   const nodes = [];
   for (const [id, layer] of layerOfNode) {
     const n = nodeById.get(id);

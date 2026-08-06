@@ -8,8 +8,19 @@ import { fileURLToPath } from "node:url";
 import { normalizeGraph } from "./atlas-normalize.mjs";
 import { reduceGraph } from "./atlas-reduce.mjs";
 
-const ATLAS_DIR = fileURLToPath(new URL("../data/atlas/", import.meta.url));
-const OVERRIDES_DIR = fileURLToPath(new URL("./atlas-overrides/", import.meta.url));
+// Ausgabe- und Override-Verzeichnis sind ueber Umgebungsvariablen
+// umlenkbar. NUR fuer tests/gen-atlas.test.js gedacht (Vorbild:
+// __resetAtlasCache in assets/js/atlas-data.js): der Testlauf startet diese
+// CLI als echten Prozess, und ohne die Umlenkung schriebe er dabei in das
+// echte data/atlas/ des Repos. Im normalen Gebrauch sind beide Variablen
+// nicht gesetzt und es bleibt exakt beim bisherigen Verhalten.
+const withSlash = (p) => (p.endsWith("/") || p.endsWith("\\") ? p : `${p}/`);
+const ATLAS_DIR = process.env.MARCO_ATLAS_OUT_DIR
+  ? withSlash(process.env.MARCO_ATLAS_OUT_DIR)
+  : fileURLToPath(new URL("../data/atlas/", import.meta.url));
+const OVERRIDES_DIR = process.env.MARCO_ATLAS_OVERRIDES_DIR
+  ? withSlash(process.env.MARCO_ATLAS_OVERRIDES_DIR)
+  : fileURLToPath(new URL("./atlas-overrides/", import.meta.url));
 
 function fail(message) {
   console.error(`gen-atlas: ${message}`);

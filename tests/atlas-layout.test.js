@@ -40,10 +40,6 @@ test("Ringe sind auf dem uebergebenen Mittelpunkt zentriert", () => {
   for (const r of rings) { assert.equal(r.cx, 640); assert.equal(r.cy, 350); }
 });
 
-test("kein Radius wird null oder negativ — auch nicht bei 320 px", () => {
-  const { rings } = computeAtlasLayout(ATLAS, { level: 2, cx: 160, cy: 300, w: 320, h: 600 });
-  for (const r of rings) { assert.ok(r.rx > 0, `rx=${r.rx}`); assert.ok(r.ry > 0, `ry=${r.ry}`); }
-});
 
 test("alle Knoten liegen innerhalb des Viewports", () => {
   const { nodes } = computeAtlasLayout(ATLAS, WIDE);
@@ -121,33 +117,60 @@ test("leerer Atlas liefert leere Listen statt zu werfen", () => {
   assert.deepEqual(out.edges, []);
 });
 
-test("sechs Layer bleiben bei schmalem Viewport visuell unterscheidbar", () => {
-  const sixLayers = {
-    id: "test", repo: "test", generatedAt: "2026-08-05",
-    source: { tool: "test", license: "MIT" },
-    layers: [
-      { id: "l1", label: "Layer 1", summary: "", count: 1 },
-      { id: "l2", label: "Layer 2", summary: "", count: 1 },
-      { id: "l3", label: "Layer 3", summary: "", count: 1 },
-      { id: "l4", label: "Layer 4", summary: "", count: 1 },
-      { id: "l5", label: "Layer 5", summary: "", count: 1 },
-      { id: "l6", label: "Layer 6", summary: "", count: 1 }
-    ],
-    modules: []
-  };
-  const { rings } = computeAtlasLayout(sixLayers, { level: 2, cx: 160, cy: 300, w: 375, h: 700 });
-  assert.equal(rings.length, 6);
-  // Alle sechs Radien muessen paarweise verschieden sein und positiv bleiben
-  const rxValues = rings.map((r) => r.rx);
-  for (let i = 0; i < rxValues.length; i++) {
-    assert.ok(rxValues[i] > 0, `ring ${i}: rx=${rxValues[i]} muss positiv sein`);
+// Abschlusspruefung 3b: der Schmalviewport-Zweig (NARROW_INNER_RX,
+// NARROW_RING_STEP) ist raus — er war unerreichbar, und die drei Tests, die
+// ihn abdeckten, blieben gruen, wenn man ihn loeschte. Was heute
+// tatsaechlich garantiert wird und hier geprueft gehoert: die Radien sind
+// ausnahmslos strikt positiv UND streng monoton wachsend, egal wie eng es
+// wird. Diese Garantie leisten Math.max(innerRx, ...), opts.maxRadius und
+// MIN_RING_STEP zusammen — ohne jede Breitenschwelle.
+
+const SECHS_LAYER = {
+  id: "test", repo: "test", generatedAt: "2026-08-05",
+  source: { tool: "test", license: "MIT" },
+  layers: Array.from({ length: 6 }, (_, i) => ({
+    id: `l${i + 1}`, label: `Layer ${i + 1}`, summary: "", count: 1
+  })),
+  modules: []
+};
+
+function pruefeRadien(rings, erwarteteAnzahl) {
+  assert.equal(rings.length, erwarteteAnzahl);
+  for (const [i, r] of rings.entries()) {
+    assert.ok(r.rx > 0, `Ring ${i}: rx=${r.rx} muss strikt positiv sein`);
+    assert.ok(r.ry > 0, `Ring ${i}: ry=${r.ry} muss strikt positiv sein`);
+    if (i > 0) {
+      assert.ok(
+        r.rx > rings[i - 1].rx,
+        `Ring ${i}: rx=${r.rx} muss echt groesser sein als rx=${rings[i - 1].rx} des inneren Rings`
+      );
+      assert.ok(r.ry > rings[i - 1].ry, `Ring ${i}: ry muss echt wachsen`);
+    }
   }
-  const uniqueRx = new Set(rxValues);
-  assert.equal(
-    uniqueRx.size,
-    6,
-    `alle sechs rx sollten unterschiedlich sein, aber ${JSON.stringify(rxValues)} hat ${uniqueRx.size} unterschiedliche Werte`
-  );
+}
+
+test("sechs Ringe wachsen streng monoton — auch bei absurd kleinem maxRadius", () => {
+  // 1 liegt weit unter innerRx (74): der Extremfall, in dem die alte
+  // clamp()-Klemmung alle sechs Ringe auf denselben Radius zusammenfallen
+  // liess. MIN_RING_STEP haelt sie jetzt auseinander.
+  pruefeRadien(computeAtlasLayout(SECHS_LAYER, { level: 2, cx: 640, cy: 350, w: 1280, h: 700, maxRadius: 1 }).rings, 6);
+  pruefeRadien(computeAtlasLayout(SECHS_LAYER, { level: 2, cx: 640, cy: 350, w: 1280, h: 700, maxRadius: 0 }).rings, 6);
+  pruefeRadien(computeAtlasLayout(SECHS_LAYER, { level: 2, cx: 640, cy: 350, w: 1280, h: 700, maxRadius: -50 }).rings, 6);
+});
+
+test("sechs Ringe wachsen streng monoton — auch in einem winzigen Viewport", () => {
+  // Der Fall aus Falle 3: unter 400px Breite wurde maxRx frueher negativ und
+  // SVG verwarf saemtliche Ellipsen. Die Klemmung faengt das ohne eigenen
+  // Schmalviewport-Zweig ab.
+  pruefeRadien(computeAtlasLayout(SECHS_LAYER, { level: 2, cx: 160, cy: 300, w: 320, h: 600 }).rings, 6);
+  pruefeRadien(computeAtlasLayout(SECHS_LAYER, { level: 2, cx: 4, cy: 4, w: 8, h: 8 }).rings, 6);
+});
+
+test("auch der Planet direkt am Viewportrand liefert wachsende Radien", () => {
+  // cx = 0 bzw. cx = w: Math.min(cx, w - cx) wird 0, roomX also negativ,
+  // bevor Math.max(innerRx, ...) greift.
+  pruefeRadien(computeAtlasLayout(SECHS_LAYER, { level: 2, cx: 0, cy: 0, w: 1280, h: 700 }).rings, 6);
+  pruefeRadien(computeAtlasLayout(SECHS_LAYER, { level: 2, cx: 1280, cy: 700, w: 1280, h: 700 }).rings, 6);
 });
 
 // Fix-Runde 2 (Task-8-Review): opts.maxRadius laesst den Aufrufer eine
@@ -166,18 +189,13 @@ test("maxRadius begrenzt den aeussersten Ring tatsaechlich", () => {
   assert.ok(rings[1].rx < unconstrained.rings[1].rx, "maxRadius muss tatsaechlich verkleinern, nicht nur durchreichen");
 });
 
-test("ein absurd kleiner maxRadius liefert trotzdem strikt positive, unterscheidbare Radien", () => {
-  // 76 = innerRx(74) + 2: der denkbar knappste Wert, der noch ueber der
-  // inneren Untergrenze liegt. Kleiner als innerRx ist bewusst nicht
-  // getestet -- das aeussere Math.max(innerRx, ...) in computeAtlasLayout
-  // garantiert dort weiterhin strikt positive Radien, klemmt aber wie
-  // dokumentiert alle Ringe auf denselben Wert (innerRx). Das ist die
-  // bewusste Prioritaet "sichtbar, aber gestaucht" vor "negativ/verworfen"
-  // und kein Fehler dieses Tests.
-  const { rings } = computeAtlasLayout(ATLAS, { ...WIDE, maxRadius: 76 });
-  for (const r of rings) assert.ok(r.rx > 0, `rx=${r.rx} muss positiv sein`);
-  const uniqueRx = new Set(rings.map((r) => r.rx));
-  assert.equal(uniqueRx.size, rings.length, "Radien muessen bei knappem maxRadius unterscheidbar bleiben");
+test("ein absurd kleiner maxRadius liefert trotzdem strikt positive, wachsende Radien", () => {
+  // 76 = innerRx(74) + 2: der knappste Wert, der noch ueber der inneren
+  // Untergrenze liegt. Abschlusspruefung 3b: Werte UNTER innerRx sind
+  // inzwischen ebenfalls abgedeckt (siehe die drei Tests oben) — dort
+  // greift MIN_RING_STEP, statt alle Ringe auf innerRx zusammenfallen zu
+  // lassen, wie es die alte clamp()-Klemmung tat.
+  pruefeRadien(computeAtlasLayout(ATLAS, { ...WIDE, maxRadius: 76 }).rings, 2);
 });
 
 test("ohne maxRadius reproduziert computeAtlasLayout exakt das bisherige Ergebnis", () => {

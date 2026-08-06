@@ -5,7 +5,6 @@
 
 export const MAX_LAYERS = 6;
 export const MAX_MODULES_PER_LAYER = 8;
-const FALLBACK_LAYER = "sonstiges";
 
 // Deterministische Sortierung: Fan-in absteigend, dann Fan-out absteigend,
 // dann Pfad alphabetisch, dann id alphabetisch. Ohne die letzte Stufe waere die
@@ -71,9 +70,20 @@ export function reduceGraph(nodes, options) {
   const fanIn = new Map();
   for (const n of visible) for (const d of n.deps) fanIn.set(d, (fanIn.get(d) ?? 0) + 1);
 
+  // Jeder Knoten MUSS einen Layer tragen. normalizeGraph baut seine
+  // Ausgabe aus layerOfNode auf und kann darum gar keinen layerlosen Knoten
+  // liefern; bis zum Task-2-Neuschrieb sammelte hier ein Fallback-Layer
+  // "sonstiges" die Reste ein. Den gibt es nicht mehr, und ein stiller
+  // Ersatzring waere heute die schlechteste Option: er wuerde einen Fehler
+  // im Adapter als Architektur des Projekts ausgeben. Der Generator ist ein
+  // CLI-Lauf — eine verletzte Vorbedingung gehoert dort laut ins Terminal,
+  // nicht still in die Szene.
   const byLayer = new Map();
   for (const n of visible) {
-    const key = n.layer || FALLBACK_LAYER;
+    const key = n.layer;
+    if (typeof key !== "string" || !key) {
+      throw new Error(`atlas-reduce: Knoten "${n.id}" hat keinen Layer — Fehler in atlas-normalize.mjs, nicht in den Daten.`);
+    }
     if (!byLayer.has(key)) byLayer.set(key, []);
     byLayer.get(key).push(n);
   }
