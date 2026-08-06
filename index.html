@@ -336,7 +336,7 @@ button{font:inherit}
             <sc-if value="{{ atlasAvailable }}" hint-placeholder-val="{{ true }}">
               <div style="margin:0 0 22px">
                 <button type="button" onClick="{{ toggleAtlas }}" style="background:none;border:0;padding:0 0 10px;cursor:pointer;font:500 12px/1 'JetBrains Mono',monospace;color:{{ activeAccent }}">{{ atlasLabel }}</button>
-                <div style="display:grid;grid-template-rows:{{ atlasRows }};transition:grid-template-rows .45s cubic-bezier(.22,1,.3,1)">
+                <div style="display:grid;grid-template-rows:{{ atlasRows }};opacity:{{ atlasOpacity }};transition:grid-template-rows .45s cubic-bezier(.22,1,.3,1), opacity .3s">
                   <div style="min-height:0;overflow:hidden">
                     <div style="padding:14px 16px;border-radius:13px;background:rgba(255,255,255,.035);border:1px solid rgba(160,140,230,.16)">
                       <sc-if value="{{ atlasError }}" hint-placeholder-val="{{ false }}">
@@ -349,14 +349,20 @@ button{font:inherit}
                       </sc-if>
                       <sc-for list="{{ atlasLayers }}" as="ly" hint-placeholder-count="4">
                         <div style="margin-bottom:4px">
-                          <button type="button" onClick="{{ ly.toggle }}" style="display:block;width:100%;text-align:left;background:none;border:0;padding:7px 0;cursor:pointer;font:500 12px/1.4 'JetBrains Mono',monospace;color:#c9c5e8">{{ ly.label }}</button>
+                          <button type="button" onClick="{{ ly.toggle }}" aria-expanded="{{ ly.expanded }}" style="display:block;width:100%;text-align:left;background:none;border:0;padding:7px 0;cursor:pointer;font:500 12px/1.4 'JetBrains Mono',monospace;color:{{ activeAccent }}">{{ ly.label }}</button>
                           <div style="display:grid;grid-template-rows:{{ ly.rows }};opacity:{{ ly.opacity }};transition:grid-template-rows .35s cubic-bezier(.22,1,.3,1), opacity .25s;padding-left:14px">
                             <div style="min-height:0;overflow:hidden">
+                              <!-- md.cardStyle/summaryStyle/depsStyle kommen fertig aus renderVals():
+                                   der Sammelknoten "+N weitere" (m.more aus atlas-reduce.mjs) bekommt
+                                   dort Kartenrahmen/-hintergrund und Unterzeilen weggerechnet, damit
+                                   er als reine Textzeile erscheint, ohne dass das Markup hier per
+                                   sc-if auf eine Loop-Variablen-Property verzweigen muesste (dafuer
+                                   gibt es keinen belegten Support in dieser dc-Runtime). -->
                               <sc-for list="{{ ly.modules }}" as="md" hint-placeholder-count="4">
-                                <div style="margin:6px 0;padding:8px 10px;border-radius:9px;background:rgba(255,255,255,.025);border:1px solid rgba(160,140,230,.1)">
+                                <div style="{{ md.cardStyle }}">
                                   <div style="font:500 11.5px/1.3 'JetBrains Mono',monospace;color:{{ activeAccent }}">{{ md.label }}</div>
-                                  <div style="margin-top:3px;font:400 11.5px/1.5 'Space Grotesk',sans-serif;color:#a9a3d2">{{ md.summary }}</div>
-                                  <div style="margin-top:3px;font:400 10px/1.4 'JetBrains Mono',monospace;color:#6f6a92">{{ md.deps }}</div>
+                                  <div style="{{ md.summaryStyle }}">{{ md.summary }}</div>
+                                  <div style="{{ md.depsStyle }}">{{ md.deps }}</div>
                                 </div>
                               </sc-for>
                             </div>
@@ -1150,9 +1156,9 @@ class Component extends DCLogic {
       // Akkordeon-Liste ist bei jeder Breite lesbar (anders als die
       // fruehere Ring-Geometrie).
       atlasAvailable: Boolean(this.state.atlasIndex && activeP && this._atlas?.hasAtlas(this.state.atlasIndex, activeP.id)),
-      atlasOpen: this.state.atlasOpen,
       atlasLabel: this.state.atlasOpen ? "▾ Architektur verbergen" : "▸ Architektur anzeigen",
       atlasRows: this.state.atlasOpen ? "1fr" : "0fr",
+      atlasOpacity: this.state.atlasOpen ? 1 : 0,
       toggleAtlas: this.toggleAtlas,
       atlasHighlights: this.state.atlas?.highlights ?? [],
       atlasHasHighlights: (this.state.atlas?.highlights ?? []).length > 0,
@@ -1163,10 +1169,24 @@ class Component extends DCLogic {
         return {
           id: layer.id,
           label: `${expanded ? "▾" : "▸"} ${layer.label} (${layer.count})`,
+          expanded: String(expanded),
           toggle: () => this.toggleAtlasLayer(layer.id),
           rows: expanded ? "1fr" : "0fr", opacity: expanded ? 1 : 0,
           modules: modules.map((m) => ({
             id: m.id, label: m.label, summary: m.summary,
+            // Der Sammelknoten "+N weitere" (m.more, siehe atlas-reduce.mjs
+            // reduceGraph) ist laut Spec eine nicht-interaktive Textzeile,
+            // keine Modul-Karte -- hier fertige Style-Strings statt einer
+            // sc-if-Verzweigung im Template auf eine Loop-Variable.
+            cardStyle: m.more
+              ? "margin:6px 0;padding:0;background:none;border:0"
+              : `margin:6px 0;padding:8px 10px;border-radius:9px;background:rgba(255,255,255,.025);border:1px solid ${hexA(accent, 0.1)}`,
+            summaryStyle: m.more
+              ? "display:none"
+              : "margin-top:3px;font:400 11.5px/1.5 'Space Grotesk',sans-serif;color:#a9a3d2",
+            depsStyle: m.more
+              ? "display:none"
+              : "margin-top:3px;font:400 10px/1.4 'JetBrains Mono',monospace;color:#6f6a92",
             deps: (m.deps ?? []).length
               ? `nutzt: ${m.deps.map((depId) => allModules.find((x) => x.id === depId)?.label).filter(Boolean).join(", ")}`
               : ""
