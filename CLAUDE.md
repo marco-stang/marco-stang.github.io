@@ -181,7 +181,7 @@ component logic live *inside* `index.html`; there is no CSS file for it.
 - `assets/js/sky-v3.js` — one canvas, one rAF loop: nebula, parallax stars,
   shooting stars, and the face constellation on hovering the sun.
 
-**Four traps this runtime has already caused.** All fixed, all easy to
+**Six traps this runtime has already caused.** All fixed, all easy to
 reintroduce:
 
 1. Dynamic `import()` inside the template block resolves relative to
@@ -197,6 +197,27 @@ reintroduce:
 4. Mobile chrome is driven by a `@media (max-width: 760px)` block with
    `!important`, because the elements carry inline styles. Classes: `.m-hide`,
    `.m-only`, `.hdr*`, `.hud*`, `.tabs`, `.livering`.
+5. `{{ … }}` interpolations always render as an HTML `<span class="sc-interp">`
+   — inside a normal element that's invisible, but inside an SVG `<text>` it
+   renders *nothing*, because SVG text only paints character data or
+   `tspan`/`textPath`. Symptom: the element sits in the DOM with the right
+   content, `visibility: visible`, `opacity: 1` — and `getBBox()` still
+   reports 0×0. Confirmed by comparing against a real SVG `<text>` built with
+   `createElementNS` at the same spot, which rendered 75px wide. Fix used
+   here: render such labels as absolutely positioned HTML above the SVG (the
+   module labels now do what the planet labels already did), and don't forget
+   `pointer-events: none` or the label steals hover from the node underneath.
+6. `animation-fill-mode: both` permanently overrides any inline `transform`
+   on the same element, because CSS animations sit above inline styles in the
+   cascade. The atlas hover box carries `animation: rise .22s ease both`, and
+   `@keyframes rise` ends on `to { transform: none }` — that end value sticks
+   forever, silently discarding every `transform` declaration on the element.
+   In this repo the box's original `translate(-50%,0)` had therefore never
+   taken effect; it had been hanging off its left edge instead of centered
+   since it was first written. Symptom: the `style` attribute shows the
+   correct value, but `getComputedStyle(el).transform` is still the identity
+   matrix. Fix: split positioning/transform and animation across two nested
+   elements — the animation never touches the outer element's `transform`.
 
 **Analytics is shared.** v3 imports `assets/js/analytics.js` exactly like the
 legacy page. Loading it is what *counts* a visit — reading `TOTAL.json` only
@@ -207,6 +228,50 @@ while still showing a plausible figure.
 opens, once per project. Fetching all of them upfront burned the
 60-requests-per-hour anonymous limit and left the "letzter Commit" line blank
 everywhere.
+
+## Code Atlas (data/atlas/)
+
+Reinzoomen in einen Planeten zeigt die Architektur des jeweiligen Repos:
+Stufe 1 Projekt, Stufe 2 Layer-Ringe, Stufe 3 Modulknoten. Der Regler sitzt
+im Projektfenster und erscheint nur für Projekte, die in
+`data/atlas/index.json` stehen — **und nur ab 760px Viewportbreite.**
+Darunter deckt das Projektfenster fast die gesamte Breite ab (gemessen bei
+375px: 55px bleiben frei), der Atlas läge komplett dahinter; `maxLevelFor()`
+in `assets/js/atlas-layout.js` liefert dort deshalb 1, und der Regler wird
+gar nicht erst gerendert statt als ein Regler zu erscheinen, der nachweislich
+nichts bewirkt.
+
+Rohdaten kommen von Understand-Anything (Egonex-AI, MIT) — **nur als
+Datenquelle, nie als UI**: ihr Viewer ist ein Node-Prozess und auf GitHub
+Pages nicht lauffähig. Reduktion und Darstellung sind Eigenleistung.
+
+Bisher ein Pilot: `sql-agent` (Repo `sql-copilot`). Ein zweiter Pilot für
+`marco-os` selbst war vorgesehen, ist aber noch nicht umgesetzt — er hängt an
+einer Rücksprache mit Marco, weil die dafür nötige `data/projects.js`-id erst
+nach dieser Rücksprache entsteht (siehe DoD-Punkt 9 der Spec).
+
+Atlas für ein Repo neu erzeugen:
+
+```bash
+cd ../<repo> && # /understand in Claude Code ausführen
+cd ../marco-os && node tools/gen-atlas.mjs ../<repo> <projekt-id>
+```
+
+Die `<projekt-id>` muss einer `id` aus `data/projects.js` entsprechen; der
+Generator bricht sonst ab. Die `.ua/`-Rohgraphen bleiben in den jeweiligen
+Repos und sind dort gitignored — nur die reduzierte Fassung wird committed.
+
+| Datei | Zweck |
+| --- | --- |
+| `tools/gen-atlas.mjs` | CLI-Einstieg: liest `.ua/knowledge-graph.json`, ruft Normalisierung und Reduktion auf, schreibt `data/atlas/<id>.json` und `data/atlas/index.json` |
+| `tools/atlas-normalize.mjs` | Adapter aufs fremde Rohschema — die **einzige** Stelle, die bricht, wenn Understand-Anything sein Format ändert |
+| `tools/atlas-reduce.mjs` | Kappung (6 Layer, 8 Module/Layer), deterministisch |
+| `tools/atlas-overrides/<id>.json` | optional: `pin`/`hide`/`labels` (u.a. deutsche Layer-Namen) |
+| `assets/js/atlas-layout.js` | reine Layout-Funktion, DOM-frei, unit-getestet |
+| `assets/js/atlas-data.js` | lazy Lader, Fehler immer still → `null` |
+
+Das beobachtete Rohschema steht in
+`docs/superpowers/plans/2026-08-05-atlas-rohschema.md`.
 
 ## Working style notes for this repo
 

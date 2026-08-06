@@ -114,8 +114,21 @@ Breite; ohne diese Kurzform überlappen sich lange Titel auf dem Handy.
   externen Monitor: GitHub verwarf ~85 % der geplanten Läufe, damit war der
   Workflow als Warmhalter untauglich (Begründung im Kopf der Datei)
 - `tools/` — `gen-nebula.mjs` (Nebel-Textur für den Hintergrund),
-  `gen-diagram.mjs`, `portfolio_ui.py` (geteilte Streamlit-Bausteine)
+  `gen-diagram.mjs`, `gen-atlas.mjs` (Code Atlas, siehe unten),
+  `portfolio_ui.py` (geteilte Streamlit-Bausteine)
+- `data/atlas/` — reduzierte Architektur-Graphen fürs Reinzoomen in Planeten
 - `docs/` — Specs, Pläne und Styleguides
+
+## Code Atlas
+
+Reinzoomen in einen Planeten zeigt dessen Architektur direkt in der Szene:
+Layer als Ringe, Module als Knoten. Bisher ein Pilot (`sql-agent`), erzeugt
+mit `node tools/gen-atlas.mjs ../sql-copilot sql-agent`.
+
+Die Architekturansicht („Code Atlas") nutzt
+[Understand-Anything](https://github.com/Egonex-AI/Understand-Anything)
+(Egonex-AI, MIT) zur Graph-Extraktion aus den Repos. Reduktions-Pipeline,
+Layout und Szenen-Integration sind Eigenleistung.
 
 ## Weiterführend
 

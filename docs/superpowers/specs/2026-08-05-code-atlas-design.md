@@ -208,9 +208,12 @@ einem Klick herauskommt.
 ### Der Regler
 
 - Erscheint **nur**, wenn ein Projekt aktiv ist *und* in `index.json` einen
-  Atlas hat. Kein ausgegrauter Regler bei Projekten ohne Atlas — er ist dann
-  schlicht nicht da. Ein deaktiviertes Bedienelement wirft die Frage auf,
-  warum es nicht geht; ein fehlendes wirft sie nicht auf.
+  Atlas hat *und* der Viewport ≥ 760 px breit ist. Kein ausgegrauter Regler
+  bei Projekten ohne Atlas oder auf schmalem Viewport — er ist dann schlicht
+  nicht da. Ein deaktiviertes Bedienelement wirft die Frage auf, warum es
+  nicht geht; ein fehlendes wirft sie nicht auf. (Die 760-px-Grenze ist eine
+  spätere Korrektur — siehe „Korrektur nach Umsetzung" unten; ursprünglich
+  war hier eine reduzierte Zwei-Stufen-Variante vorgesehen.)
 - Sitzt im Projektfenster, nicht in der globalen Leiste — er gilt für *dieses*
   Projekt. (Der spätere Persona-Schalter ist der globale, das darf sich
   visuell nicht vermischen.)
@@ -245,7 +248,7 @@ vorhanden (`try { this.measureLabelsBody(); } catch` — index.html:545).
 | Atlas-JSON ist kaputt / Schema passt nicht | Wie oben. Validierung beim Laden, nicht Vertrauen auf Wohlgeformtheit. |
 | Atlas verweist auf `id`, die es in `projects.js` nicht gibt | Vom Generator abgefangen (Abbruch mit klarer Meldung), nicht zur Laufzeit. |
 | Zu viele Knoten | Kann zur Laufzeit nicht auftreten — im Generator gekappt. |
-| Schmaler Viewport (`w < 760`) | Eigener Zweig in der Layout-Funktion, siehe Falle 3. Unterhalb 760 px hat der Regler **zwei** Stufen statt drei — Stufe 3 wird dort nicht angeboten, weil Modulpunkte in dieser Breite zur unlesbaren Wolke werden. Der Regler zeigt dann „Projekt / Struktur". |
+| Schmaler Viewport (`w < 760`) | Eigener Zweig in der Layout-Funktion, siehe Falle 3. Unterhalb 760 px **erscheint der Regler gar nicht** — nicht zwei Stufen wie ursprünglich hier geplant. Begründung siehe Korrektur unten. |
 
 ## 4. Tests
 
@@ -333,6 +336,22 @@ Modul-Summaries sind ausformuliertes Deutsch. Undokumentiert, aber funktionieren
 Weder ein Übersetzungsschritt im Generator noch handgesetzte Layer-Labels sind
 nötig. Der Override-Weg (`labels` in `tools/atlas-overrides/<id>.json`) bleibt
 als Rückfallebene bestehen, falls ein späteres Repo doch englisch herauskommt.
+
+## Korrektur nach Umsetzung: Regler unter 760 px
+
+Diese Spec sah unter 760 px ursprünglich eine reduzierte Zwei-Stufen-Variante
+des Reglers vor („Projekt / Struktur", Stufe 3 abgeschaltet). In der
+Umsetzung (Fix-Runde 3) hat sich das als nicht haltbar erwiesen: bei 375 px
+Breite deckt das Projektfenster fast die gesamte Bildschirmbreite ab —
+gemessen blieben 55 px frei —, sodass selbst der Atlas auf Stufe 2 komplett
+hinter dem Fenster läge und für den Besucher nicht sichtbar wäre. Ein Regler,
+der nachweislich keine sichtbare Stufe erreicht, ist unehrlich.
+
+Marcos Entscheidung auf Basis dieser Messung: der Regler erscheint unterhalb
+760 px gar nicht. `maxLevelFor()` in `assets/js/atlas-layout.js` liefert dort
+Stufe 1, und `atlasAvailable` in `index.html` verlangt zusätzlich, dass mehr
+als eine Stufe erreichbar ist. Alle Stellen oben, die noch von „zwei Stufen
+unter 760 px" sprechen, sind durch diese Entscheidung überholt.
 
 ## Definition of Done
 
