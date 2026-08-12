@@ -171,8 +171,9 @@ export const projects = [
     title: "Fraud Triage Copilot",
     shortTitle: "Fraud Triage",
     summary:
-      "Priorisiert die Fraud-Queue eines Marktplatzes und erklärt jeden " +
-      "Verdachtsfall in Analysten-Sprache. Entscheiden bleibt Menschensache.",
+      "Führt eine Bestellung Schritt für Schritt durch die Betrugsprüfung: " +
+      "ML-Score, SHAP-Erklärung, Analysten-Briefing. Entscheiden bleibt " +
+      "Menschensache.",
     description:
       "Auf einem synthetischen Luxusuhren-Marktplatz scort ein Gradient-Boosting-" +
       "Modell jede Bestellung, SHAP legt die Treiber offen und ein Briefing " +
