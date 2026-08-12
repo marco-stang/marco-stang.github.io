@@ -167,6 +167,37 @@ export const projects = [
     cluster: "full-stack"
   },
   {
+    id: "fraud-triage",
+    title: "Fraud Triage Copilot",
+    shortTitle: "Fraud Triage",
+    summary:
+      "Priorisiert die Fraud-Queue eines Marktplatzes und erklärt jeden " +
+      "Verdachtsfall in Analysten-Sprache. Entscheiden bleibt Menschensache.",
+    description:
+      "Auf einem synthetischen Luxusuhren-Marktplatz scort ein Gradient-Boosting-" +
+      "Modell jede Bestellung, SHAP legt die Treiber offen und ein Briefing " +
+      "übersetzt sie in nächste Schritte für den Fraud-Analysten. Bewertet wird " +
+      "an der Größe, die ein Team wirklich spürt: Precision@200 von 1,0 gegen " +
+      "0,935 der Regel-Baseline, bei zeitlichem Split. Die Eval weist den Recall " +
+      "pro Betrugsmuster aus statt einer Gesamtzahl, und genau da liegt die " +
+      "ehrliche Schwäche: Ghost Listings findet das Modell komplett, Account " +
+      "Takeover nur zu 85,1 Prozent, weil dessen Trust-Signale legitim aussehen. " +
+      "Ein zweites, mit zusätzlichen Verhaltenssignalen trainiertes Modell hebt " +
+      "diesen Recall auf 91,5 Prozent, schließt die Lücke aber nicht vollständig " +
+      "und kostet Recall bei einem verwandten Muster — der Trade-off wird in der " +
+      "Demo gezeigt, nicht versteckt. Das Briefing nennt ausschließlich belegte " +
+      "Treiber, per Guardrail getestet.",
+    tags: ["scikit-learn", "SHAP", "Streamlit", "Python", "Claude API"],
+    stats: [
+      { value: "1,0", label: "Precision@200 (Regeln: 0,935)" },
+      { value: "85 %", label: "ATO-Recall, ehrlich" }
+    ],
+    demoUrl: null,
+    repoUrl: "https://github.com/marco-stang/fraud-triage-copilot",
+    status: "no-demo",
+    cluster: "full-stack"
+  },
+  {
     id: "hr-interview-cockpit",
     title: "Interview Cockpit",
     summary:
