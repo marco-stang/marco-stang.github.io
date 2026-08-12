@@ -192,9 +192,9 @@ export const projects = [
       { value: "1,0", label: "Precision@200 (Regeln: 0,935)" },
       { value: "85 %", label: "ATO-Recall, ehrlich" }
     ],
-    demoUrl: null,
+    demoUrl: "https://fraud-triage-copilot.streamlit.app/",
     repoUrl: "https://github.com/marco-stang/fraud-triage-copilot",
-    status: "no-demo",
+    status: "live",
     cluster: "full-stack"
   },
   {
