@@ -130,11 +130,12 @@ export const projects = [
       "Hybrid-Retrieval aus BM25 und Vektorsuche mit RRF-Fusion und " +
       "Cross-Encoder-Reranker, dazu offline per Haiku erzeugte Umformulierungen " +
       "jeder FAQ-Frage als zusätzliche Embeddings. Die Hit-Rate@5 liegt bei 91 % " +
-      "auf den Tuning-Fragen und 93 % auf einem Held-out-Set, das nie zum " +
+      "auf den Tuning-Fragen und 100 % auf einem Held-out-Set, das nie zum " +
       "Justieren benutzt wurde; ein CI-Job lässt keinen Pull Request durch, der " +
-      "darunter fällt. Die ehrlichste Stelle ist die Ablationstabelle: fünf " +
-      "Ideen wurden gemessen und verworfen, darunter Frage-plus-Antwort im " +
-      "Embedding (88 % auf 82 %). Verweigern hat drei unabhängige Schichten, und " +
+      "darunter fällt. Die ehrlichste Stelle ist die Ablationstabelle: zehn " +
+      "Ideen wurden gemessen und verworfen, darunter ein Reranker mit dem " +
+      "Fünffachen an Parametern, der keinen einzigen Fehltreffer behob und die " +
+      "Antwortzeit verzehnfachte. Verweigern hat drei unabhängige Schichten, und " +
       "die billigste davon, das Retrieval-Konfidenz-Gate, stand nach der ersten " +
       "Messung bei 0 %: Das multilinguale Embedding hält jeden deutschen " +
       "Fragesatz für ähnlich, selbst „Wie backe ich einen Hefezopf?“. Nach dem " +
@@ -145,7 +146,7 @@ export const projects = [
     tags: ["RAG", "FastAPI", "Chroma", "BM25", "Claude API", "Python"],
     stats: [
       { value: "91 %", label: "Hit-Rate@5" },
-      { value: "93 %", label: "Held-out" },
+      { value: "100 %", label: "Held-out" },
       { value: "50 %", label: "Off-Topic abgewiesen" }
     ],
     // Repo ist noch privat, Deploy steht aus (Render Free-Tier reicht nicht
