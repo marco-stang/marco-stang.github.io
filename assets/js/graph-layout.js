@@ -30,10 +30,10 @@ const ELLIPSE_ASPECT = 0.62;
 // Per-ring rotation so no cluster places a node on the vertical axis
 // (90deg/270deg, straight above/below the center node, where it would
 // collide with the center's own label) and so the clusters' members don't
-// all line up on the same radial spokes as each other. agentic-ai has 4
-// members spaced 90deg apart, so 45deg puts all of them on diagonals;
-// full-stack has 2 members 180deg apart, so 0deg keeps both fully
-// horizontal; cloud's single member is offset well clear of both.
+// all line up on the same radial spokes as each other. With the current
+// membership (agentic-ai 5, cloud 1, full-stack 4) the landscape layout
+// keeps a 123px minimum node distance, so these values were left alone when
+// the portrait ones below were retuned — measure before changing them.
 const CLUSTER_ANGLE_OFFSET_DEG = {
   "agentic-ai": 45,
   cloud: 200,
@@ -58,9 +58,12 @@ const IDEA_ORBIT_MULTIPLIER = 1.2;
 // rings, a single small moon orbit doesn't need to match the viewport's
 // aspect ratio.
 const MOON_RADIUS = 140;
-// -15deg (mostly rightward, barely up) sits clear of agentic-ai's own three
-// member angles (45/165/285deg, each ~60deg+ away), so the moon and its
-// label don't crowd whichever agentic-ai planet happens to render nearby.
+// -15deg (mostly rightward, barely up) keeps the moon off the agentic-ai
+// ring's own spokes, so the moon and its label don't crowd whichever
+// agentic-ai planet happens to render nearby. Since the ring grew to five
+// members the moon is the tightest landscape pair (123px at 1280px wide) —
+// still well clear at a 34px planet size, but it is the number to watch if
+// another agentic-ai project is added.
 const MOON_ANGLE_OFFSET_DEG = -15;
 
 function viewportScale(viewportSize) {
@@ -86,37 +89,43 @@ const PORTRAIT_ASPECT_MAX = 1.25;
 // der Mond samt Label klebt im 52px-Dot + Glow + Label des Zentrums.
 const MOON_MIN_RADIUS = 72;
 
-// Portrait-Rotation je Cluster: full-stack liegt im Landscape-Layout mit
-// Offset 0deg voll horizontal — auf einem Portrait-Viewport ist das exakt
-// die knappste Achse. 90deg stellt seine beiden Nodes senkrecht (oben/
-// unten, wo der Platz ist); cloud rückt auf 160deg (links oben), damit es
-// weder mit full-stack (vertikal) noch agentic-ai (Diagonalen) kollidiert.
+// Portrait-Rotation je Cluster. Diese drei Werte und der cloud-Radius unten
+// wurden per Rastersuche bestimmt: maximiere den kleinsten Abstand zwischen
+// zwei beliebigen Knoten über fünf Portrait-Viewports (360x800, 390x844,
+// 414x896, 430x932, 768x1024). Von Hand ist das nicht mehr zu treffen —
+// agentic-ai trägt inzwischen fünf Ring-Knoten, und jede Winkeländerung
+// verschiebt gleichzeitig fünf Positionen gegen sechs andere.
+//
+// Kleinster Knotenabstand im Portrait (Planeten sind 34px):
+//   9 Projekte, alte Werte (45/135/90, cloud 1.65): 44px
+//   11 Projekte, alte Werte:                        35px  <- Regression
+//   11 Projekte, diese Werte:                       54px
+//
+// Wer Projekte hinzufügt oder Cluster umhängt, fährt die Suche neu — die
+// Werte gelten für genau diese Knotenverteilung (agentic 5, cloud 1,
+// full-stack 4), nicht allgemein.
 const CLUSTER_ANGLE_OFFSET_DEG_PORTRAIT = {
-  "agentic-ai": 45,
-  // 135deg (unten links) hält den einzelnen Cloud-Knoten aus beiden
-  // Stau-Zonen heraus: 160deg lag fast auf der 165deg-Richtung des
-  // agentic-Rings, 200deg auf der 210deg-Richtung des full-stack-Rings —
-  // bei den eng beieinanderliegenden Portrait-Radien kollidierten dort
-  // jeweils die Labels.
-  cloud: 135,
-  "full-stack": 90
+  "agentic-ai": 180,
+  cloud: 285,
+  "full-stack": 135
 };
 
 // Portrait-rx-Multiplikatoren: die inneren Ringe rücken relativ weiter nach
-// außen (1.25/1.65 statt 0.95/1.45), weil auf schmalen Viewports sonst die
+// außen (1.25/1.8 statt 0.95/1.45), weil auf schmalen Viewports sonst die
 // Labels des innersten Rings mit dem Zentrum (Sonne + "Marco Stang"-Label +
 // Mond) kollidieren — der äußerste Ring (2) bestimmt weiterhin den Fit.
 const CLUSTER_RX_MULTIPLIER_PORTRAIT = {
   "agentic-ai": 1.25,
-  cloud: 1.65,
+  // 1.8 statt 1.65: schiebt den einzelnen Cloud-Knoten weiter vom
+  // agentic-Ring weg, der seit den zwei neuen Projekten dichter besetzt ist.
+  cloud: 1.8,
   "full-stack": 2
 };
 
-// Mond-Winkel im Portrait-Layout: exakt rechts (0deg). Oben ist im
-// Portrait-Layout die Stau-Zone (MCE 285deg, Interview 330deg, Applied ML
-// 210deg) — rechts auf Sonnenhöhe ist der einzige freie Sektor, in dem
-// weder der Mond noch sein Label ("Ask-Marco Assistant", auf Mobile
-// zweizeilig) etwas berührt.
+// Mond-Winkel im Portrait-Layout: exakt rechts (0deg) — von derselben
+// Rastersuche wie die Winkel oben bestätigt (90/180/270 schneiden alle
+// schlechter ab). Rechts auf Sonnenhöhe bleibt der freieste Sektor für den
+// Mond und sein Label ("Ask-Marco Assistant", auf Mobile zweizeilig).
 const MOON_ANGLE_OFFSET_DEG_PORTRAIT = 0;
 
 function fitParams(baseRadius, clustersPresent, hasIdeas, dimensions) {
