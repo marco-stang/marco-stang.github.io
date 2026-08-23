@@ -79,14 +79,19 @@ dropped on 2026-08-03; they are no longer maintained or referenced.
 
 ## Evidence on Hand
 
-- `data/projects.js`: 8 real projects (SQL Copilot, AI Risk Classifier,
-  Review Risk Predictor, Applied ML Course, Document Auto-Classifier,
-  Medical Coding Extractor, Ask-Marco Assistant, Interview Cockpit), each
-  with a real summary, tags, and (where live) a working demo URL and repo
-  URL. Several include real, sometimes unflattering metrics (e.g. SQL
-  Copilot: 8/15 reference questions correct, 0/5 on window functions;
-  Review Risk Predictor: ROC-AUC 0.706; Medical Coding Extractor: F1 0.59
-  vs. 0.48 baseline).
+- `data/projects.js`: 11 real projects (SQL Copilot, AI Act Evidence
+  Toolkit, Medical Coding Extractor, Ask-Marco Assistant, Chrono24-FAQ-
+  Chatbot, Handover Brief Generator, Document Auto-Classifier, Review Risk
+  Predictor, Fraud Triage Copilot, Interview Cockpit, Applied ML Course),
+  each with a real summary, tags, and (where live) a working demo URL and
+  repo URL. Two of them (Chrono24-FAQ-Chatbot, Handover Brief Generator)
+  are `status: "no-demo"` with both URLs `null` — the repos are not yet
+  public/deployed, and a link a recruiter cannot open is not evidence.
+  Several include real, sometimes unflattering metrics (e.g. SQL Copilot:
+  8/15 reference questions correct, 0/5 on window functions; Review Risk
+  Predictor: ROC-AUC 0.706; Medical Coding Extractor: F1 0.59 vs. 0.48
+  baseline; Chrono24 chatbot: off-topic abstention 50 %; Handover Brief
+  Generator: fact-coverage 74.7 %).
 - `data/resume.js`: real CV content — current role (Solution Architect,
   ILI.DIGITAL AG), the KIT/ITIV doctorate with a Mercedes-Benz industry
   cooperation, skills list, and a downloadable CV PDF at

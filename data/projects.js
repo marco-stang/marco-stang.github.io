@@ -119,6 +119,79 @@ export const projects = [
     orbitsCenter: true
   },
   {
+    id: "chrono24-chatbot",
+    title: "Chrono24-FAQ-Chatbot",
+    shortTitle: "Chrono24 Chatbot",
+    summary:
+      "Ein RAG-Chatbot über die öffentlichen Chrono24-Hilfeseiten, der jede " +
+      "Antwort belegt, und was er nicht belegen kann, als geprüftes Briefing an " +
+      "einen Menschen übergibt.",
+    description:
+      "Hybrid-Retrieval aus BM25 und Vektorsuche mit RRF-Fusion und " +
+      "Cross-Encoder-Reranker, dazu offline per Haiku erzeugte Umformulierungen " +
+      "jeder FAQ-Frage als zusätzliche Embeddings. Die Hit-Rate@5 liegt bei 91 % " +
+      "auf den Tuning-Fragen und 93 % auf einem Held-out-Set, das nie zum " +
+      "Justieren benutzt wurde; ein CI-Job lässt keinen Pull Request durch, der " +
+      "darunter fällt. Die ehrlichste Stelle ist die Ablationstabelle: fünf " +
+      "Ideen wurden gemessen und verworfen, darunter Frage-plus-Antwort im " +
+      "Embedding (88 % auf 82 %). Verweigern hat drei unabhängige Schichten, und " +
+      "die billigste davon, das Retrieval-Konfidenz-Gate, stand nach der ersten " +
+      "Messung bei 0 %: Das multilinguale Embedding hält jeden deutschen " +
+      "Fragesatz für ähnlich, selbst „Wie backe ich einen Hefezopf?“. Nach dem " +
+      "Umbau auf ein ODER aus drei Signalen fängt es die Hälfte der " +
+      "themenfremden Fragen ohne einen einzigen verlorenen Treffer; den Rest " +
+      "müssen Prompt und ein deterministischer Faithfulness-Check tragen, " +
+      "derselbe Validator wie im Handover Brief Generator.",
+    tags: ["RAG", "FastAPI", "Chroma", "BM25", "Claude API", "Python"],
+    stats: [
+      { value: "91 %", label: "Hit-Rate@5" },
+      { value: "93 %", label: "Held-out" },
+      { value: "50 %", label: "Off-Topic abgewiesen" }
+    ],
+    // Repo ist noch privat, Deploy steht aus (Render Free-Tier reicht nicht
+    // für Embedding- plus Reranker-Modell). Links erst eintragen, wenn sie
+    // für Recruiter wirklich erreichbar sind.
+    demoUrl: null,
+    repoUrl: null,
+    status: "no-demo",
+    cluster: "agentic-ai"
+  },
+  {
+    id: "handover-brief",
+    title: "Handover Brief Generator",
+    shortTitle: "Handover Brief",
+    summary:
+      "Macht aus einem Support-Ticketverlauf bei der Übergabe ein Briefing, in " +
+      "dem jede Aussage ihre Ticketzeile zitieren muss, und ein Validator prüft " +
+      "das nach, statt dem Modell zu glauben.",
+    description:
+      "Eine Prompt-Anweisung „zitiere deine Quellen“ ist eine Bitte, keine " +
+      "Prüfung. Hier muss Claude Haiku strukturiert antworten, jede Aussage mit " +
+      "Zeilen-IDs, und ein deterministischer Validator rechnet danach pro Aussage " +
+      "den Token-Overlap gegen die zitierten Zeilen. Unbelegtes löst einen " +
+      "zweiten Versuch mit dem konkreten Fehler im Prompt aus, scheitert auch der, " +
+      "gibt es eine Fehlermeldung statt eines Briefings. Über 15 generierte " +
+      "Eval-Tickets liegt die Citation-Validity bei 98,7 % roh und 99,3 % nach " +
+      "dem Retry; die Fact-Coverage bleibt mit 74,7 % die schwächere Zahl, weil " +
+      "Token-Overlap Paraphrasen nicht sieht. Der Validator hatte selbst einen " +
+      "dokumentierten Bug: Zeilen-IDs im Fließtext zählten als Fremdwörter und " +
+      "bestraften ausgerechnet sauberes Zitieren. Und der dritte Demo-Fall zeigt " +
+      "die Architekturgrenze offen: Ein Kunde, der auf „wie letztes Mal“ " +
+      "verweist, ist für einen zeilenbasierten Prüfer unsichtbar, weil der nur " +
+      "prüft, was zitiert wurde, nicht, was fehlt.",
+    tags: ["Claude API", "Python", "Streamlit", "pytest"],
+    stats: [
+      { value: "99,3 %", label: "Citation-Validity" },
+      { value: "74,7 %", label: "Fact-Coverage" }
+    ],
+    // Noch nicht auf GitHub und nicht deployed; Streamlit Cloud ist der
+    // nächste Schritt. Links folgen, sobald sie erreichbar sind.
+    demoUrl: null,
+    repoUrl: null,
+    status: "no-demo",
+    cluster: "agentic-ai"
+  },
+  {
     id: "cloud-native-pipeline",
     title: "Document Auto-Classifier",
     shortTitle: "Auto-Classifier",
