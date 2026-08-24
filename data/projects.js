@@ -43,20 +43,23 @@ export const projects = [
     title: "AI Act Evidence Toolkit",
     shortTitle: "AI Act Toolkit",
     summary:
-      "Stuft eine KI-Anwendung nach dem EU AI Act ein und geht dann genau einen " +
-      "Schritt weiter als jedes andere Compliance-Tool: Womit belegst du die " +
-      "Pflichten technisch?",
+      "Zwei identische Bewerbungen, nur der Vorname unterscheidet sie, und ein " +
+      "Klick lässt den Score auseinanderlaufen. Dahinter die Frage, an der jedes " +
+      "andere Compliance-Tool aufhört: Womit belegst du die Pflichten technisch?",
     description:
-      "Ein deterministischer Regelbaum ordnet den Use-Case einer Risikoklasse nach " +
-      "Annex III zu. Das LLM formuliert dabei nur die Begründung und hat auf die " +
-      "Einstufung selbst keinen Einfluss, denn nachvollziehbar geht vor elegant. " +
-      "Für die technisch belegbaren Pflichten laufen metamorphe Tests gegen drei " +
-      "simulierte Systeme, und eine Namensinvarianz-Relation deckt dabei auf, dass " +
-      "ein Bewerber-Scoring den Score senkt, sobald man nur den Vornamen tauscht " +
-      "(Art. 10, Bias-Prüfung). Wer will, injiziert absichtlich Fehler und sieht in " +
-      "einer Kill-Matrix, wie viele davon die Relationsmenge wirklich fängt. Kurz " +
-      "gesagt: Marcos Promotionsthema am KIT/ITIV, in eine Anwendung übersetzt, die " +
-      "man anklicken kann.",
+      "Die Demo öffnet direkt mit dem Beweis: dasselbe Bewerbungsprofil einmal als " +
+      "Maximilian und einmal als Kevin, ein Klick auf „Fehler injizieren“, und der " +
+      "Score springt auf 91 und 79 auseinander — die Namensinvarianz-Relation " +
+      "schlägt fehl und Art. 10 fällt in der Konformitätscheckliste zurück auf " +
+      "offen (Bias-Prüfung). Davor liegt eine Einstufung, die ein deterministischer " +
+      "Regelbaum trifft: Er ordnet den Use-Case einer Risikoklasse nach Annex III " +
+      "zu, während das LLM ausschließlich die Begründung formuliert und auf die " +
+      "Klasse keinen Einfluss hat, denn nachvollziehbar geht vor elegant. Für die " +
+      "technisch belegbaren Pflichten laufen metamorphe Tests gegen drei simulierte " +
+      "Systeme, und eine Kill-Matrix zeigt, wie viele der absichtlich eingebauten " +
+      "Fehler die Relationsmenge wirklich fängt. Kurz gesagt: Marcos " +
+      "Promotionsthema am KIT/ITIV, in eine Anwendung übersetzt, die man anklicken " +
+      "kann.",
     tags: ["Python", "LangChain", "Streamlit", "pytest"],
     stats: [
       { value: "2/7", label: "Pflichten technisch belegt" },
