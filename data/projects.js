@@ -148,16 +148,13 @@ export const projects = [
       "derselbe Validator wie im Handover Brief Generator.",
     tags: ["RAG", "FastAPI", "Chroma", "BM25", "Claude API", "Python"],
     stats: [
-      { value: "91 %", label: "Hit-Rate@5" },
-      { value: "100 %", label: "Held-out" },
-      { value: "50 %", label: "Off-Topic abgewiesen" }
+      { value: "100 %", label: "Tuning-Hit-Rate@5" },
+      { value: "100 %", label: "Holdout-Hit-Rate@5" },
+      { value: "93 %", label: "Off-Topic abgewiesen" }
     ],
-    // Repo ist noch privat, Deploy steht aus (Render Free-Tier reicht nicht
-    // für Embedding- plus Reranker-Modell). Links erst eintragen, wenn sie
-    // für Recruiter wirklich erreichbar sind.
-    demoUrl: null,
-    repoUrl: null,
-    status: "no-demo",
+    demoUrl: "https://chrono24.stangai.cloud/",
+    repoUrl: "https://github.com/marco-stang/chrono24-chatbot",
+    status: "live",
     cluster: "agentic-ai"
   },
   {
